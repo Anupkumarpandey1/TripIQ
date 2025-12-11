@@ -1,0 +1,53 @@
+{
+  "esp32": {
+    "ip_address": "192.168.1.100",
+    "port": 5000,
+    "timeout": 5,
+    "reconnect_attempts": 3
+  },
+  "tests": {
+    "short_circuit": {
+      "default_current": 3000,
+      "default_voltage": 230,
+      "max_current": 10000,
+      "safety_timeout": 10
+    },
+    "trip_characteristics": {
+      "default_mcb_type": "C",
+      "default_multiplier": 1.45,
+      "thermal_multipliers": [1.13, 1.45],
+      "magnetic_multipliers": [3, 5, 10, 20]
+    },
+    "temperature_rise": {
+      "default_current": 16,
+      "default_duration": 3600,
+      "max_temperature": 150,
+      "sampling_interval": 15
+    },
+    "rl_circuit": {
+      "default_power_factor": 0.45,
+      "default_resistance": 0.5,
+      "default_inductance": 0.001,
+      "min_power_factor": 0.3,
+      "max_power_factor": 1.0
+    }
+  },
+  "ui": {
+    "theme": "dark",
+    "animation_duration": 400,
+    "auto_refresh": true,
+    "refresh_interval": 100
+  },
+  "data": {
+    "auto_save": true,
+    "save_directory": "./test_results",
+    "max_data_points": 10000,
+    "export_format": "csv"
+  },
+  "safety": {
+    "enable_interlocks": true,
+    "max_test_duration": 14400,
+    "emergency_stop_enabled": true,
+    "require_confirmation": true
+  }
+}

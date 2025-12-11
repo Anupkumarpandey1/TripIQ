@@ -1,0 +1,2 @@
+#define WIFI_SSID "M14"
+#define WIFI_PASSWORD "12345677"
