@@ -72,31 +72,35 @@
    - Sensor verification
    - Command: `CALIBRATE`
 
-## 📋 Complete Test List (8 Tests)
+## 📋 Complete Test List (9 Tests)
 
 1. ⚡ **Short-Circuit Breaking Capacity**
    - Input: Target Current (A)
    
-2. 📊 **Trip Characteristics (B, C, D Curves)**
+2. 🔧 **Variable Resistance and Inductance Configuration** *(NEW)*
+   - Input: Resistance (Ω), Inductance (H)
+   - Shows: ESP32 confirmation with actual values
+   
+3. 📊 **Trip Characteristics (B, C, D Curves)**
    - Input: MCB Curve Type, Current Rating (A)
    
-3. 🌡️ **Temperature Rise Test**
+4. 🌡️ **Temperature Rise Test**
    - Input: Rated Current (A), Duration (s)
    
-4. 🛡️ **Dielectric Strength Test** *(NEW)*
+5. 🛡️ **Dielectric Strength Test** *(NEW)*
    - Input: Test Voltage (V), Duration (s)
    
-5. ⚙️ **R-XL Circuit Configuration**
+6. ⚙️ **R-XL Circuit Configuration**
    - Input: Power Factor
    - Shows: Waveform visualization window
    
-6. ⏱️ **Breaking Time Measurement** *(FIXED)*
+7. ⏱️ **Breaking Time Measurement** *(FIXED)*
    - Input: Test Current (A)
    
-7. 🔧 **Contact Resistance Test** *(FIXED)*
+8. 🔧 **Contact Resistance Test** *(FIXED)*
    - Input: Test Current (A)
    
-8. ✓ **Calibration & Verification** *(NEW)*
+9. ✓ **Calibration & Verification** *(NEW)*
    - Input: None (automatic)
 
 ## 🔄 Updated Files
@@ -205,6 +209,47 @@ The R-XL Configuration test now opens a dedicated window showing:
 2. Click Start Test (no configuration needed)
 3. System calibrates automatically
 ```
+
+### Variable Resistance and Inductance Configuration *(NEW)*
+```
+1. Click "Variable Resistance and Inductance Configuration"
+2. Enter: Resistance = 30 Ω (Range: 12-50, integer only)
+3. Enter: Inductance = 0.0120 H (Range: 0.0000-0.0214)
+4. Click Start Test
+5. ESP32 confirmation dialog appears with actual values
+```
+
+## 🆕 Latest Addition: Variable R-L Configuration
+
+### ✅ New Feature Added
+**Variable Resistance and Inductance Configuration** 🔧
+- **Direct R-L Input**: Integer resistance (12-50 Ω) and precise inductance (0.0000-0.0214 H) values
+- **ESP32 Confirmation**: Real-time confirmation with actual achieved values
+- **UDP Bidirectional**: Command sent via UDP, confirmation received via UDP
+- **Path Selection**: Automatic selection of best relay combination
+- **Actual Values Display**: Shows actual R and L values achieved by hardware
+
+**Configuration Dialog**:
+- Resistance: [25] Ω (Range: 12-50 Ω, integer only)
+- Inductance: [0.0100] H (Range: 0.0000-0.0214 H, 4 decimal precision)
+
+**Backend Command Format**: `R:25,L:0.0100`
+
+**ESP32 Response Example**:
+```
+CONFIRMATION: R-L Configuration Applied Successfully
+Inductance Path: 1
+Resistance Path: 2
+Actual R: 35.0000 Ohms
+Actual L: 0.0500 H
+R-L_CONFIG_COMPLETE
+```
+
+**Files Modified**:
+- ✅ `frontend.py` - Added new test card and configuration dialog
+- ✅ `backend.py` - Added `set_variable_rl_configuration()` method and confirmation signal
+- ✅ `esp32_receiver.ino` - Added R-L parsing and UDP confirmation response
+- ✅ `test_integration.py` - Added test example for new feature
 
 ## ✨ All Issues Resolved!
 

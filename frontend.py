@@ -117,6 +117,21 @@ class TestConfigDialog(QDialog):
             self.power_factor.setCurrentText("0.8")
             form_layout.addRow("Power Factor:", self.power_factor)
             
+        elif "Variable Resistance and Inductance" in self.test_name:
+            # Direct R-L Configuration
+            self.resistance_input = QSpinBox()
+            self.resistance_input.setRange(12, 50)
+            self.resistance_input.setValue(25)
+            self.resistance_input.setSuffix(" Ω")
+            form_layout.addRow("Resistance:", self.resistance_input)
+            
+            self.inductance_input = QDoubleSpinBox()
+            self.inductance_input.setRange(0.0000, 0.0214)
+            self.inductance_input.setValue(0.0100)
+            self.inductance_input.setSuffix(" H")
+            self.inductance_input.setDecimals(4)
+            form_layout.addRow("Inductance:", self.inductance_input)
+            
         elif "Trip" in self.test_name:
             self.mcb_type = QComboBox()
             self.mcb_type.addItems(["B-Curve", "C-Curve", "D-Curve"])
@@ -191,6 +206,10 @@ class TestConfigDialog(QDialog):
         if "Short-Circuit" in self.test_name or "R-XL" in self.test_name:
             config['current'] = self.current_input.value()
             config['power_factor'] = float(self.power_factor.currentText())
+            
+        elif "Variable Resistance and Inductance" in self.test_name:
+            config['resistance'] = self.resistance_input.value()
+            config['inductance'] = self.inductance_input.value()
             
         elif "Trip" in self.test_name:
             config['mcb_type'] = self.mcb_type.currentText()[0]  # B, C, or D
@@ -845,6 +864,7 @@ class MCBTestingSoftware(QMainWindow):
         self.backend.data_received.connect(self.on_data_received)
         self.backend.command_sent.connect(self.on_command_sent)
         self.backend.error_occurred.connect(self.on_error_occurred)
+        self.backend.rl_config_confirmed.connect(self.on_rl_config_confirmed)
     
     def create_connection_screen(self):
         screen = QWidget()
@@ -941,7 +961,7 @@ class MCBTestingSoftware(QMainWindow):
         
         config_layout = QFormLayout()
         
-        self.ip_input = QLineEdit("192.168.137.187")
+        self.ip_input = QLineEdit("192.168.137.65")
         self.ip_input.setPlaceholderText("ESP32 IP Address")
         self.ip_input.setStyleSheet(f"""
             QLineEdit {{
@@ -1103,6 +1123,9 @@ class MCBTestingSoftware(QMainWindow):
             ("Short-Circuit Breaking Capacity & R-XL Configuration", 
              "Test MCB with configurable current and power factor, view live waveforms",
              "⚡", COLOR_PRIMARY),
+            ("Variable Resistance and Inductance Configuration", 
+             "Direct R-L configuration with precise resistance and inductance values",
+             "�", COLOR_ACCENT),
             ("Trip Characteristics (B, C, D Curves)", 
              "Verify instantaneous trip thresholds and time-current curves",
              "📊", COLOR_ACCENT),
@@ -1315,6 +1338,12 @@ class MCBTestingSoftware(QMainWindow):
         """Handle errors"""
         QMessageBox.critical(self, "Error", error)
     
+    def on_rl_config_confirmed(self, message):
+        """Handle R-L configuration confirmation from ESP32"""
+        QMessageBox.information(self, "Configuration Confirmed", 
+                               f"ESP32 Confirmation:\n{message}")
+        print(f"R-L Config Confirmed: {message}")
+    
     # ===== Connection Management =====
     
     def connect_to_esp32(self):
@@ -1388,6 +1417,22 @@ class MCBTestingSoftware(QMainWindow):
             # Open power factor visualization window
             if success:
                 self.show_power_factor_window(current, power_factor)
+                
+        elif "Variable Resistance and Inductance" in self.current_test_name:
+            # Direct R-L Configuration
+            resistance = config.get('resistance', 0.5)
+            inductance = config.get('inductance', 0.001)
+            
+            # Send R-L configuration command
+            success = self.backend.set_variable_rl_configuration(resistance, inductance)
+            
+            if success:
+                # Show confirmation dialog
+                QMessageBox.information(self, "Configuration Sent", 
+                                       f"R-L Configuration sent to ESP32:\n"
+                                       f"Resistance: {resistance:.4f} Ω\n"
+                                       f"Inductance: {inductance:.4f} H\n\n"
+                                       f"Waiting for confirmation from microcontroller...")
                 
         elif "Trip" in self.current_test_name:
             success = self.backend.start_trip_test(

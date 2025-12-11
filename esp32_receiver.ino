@@ -16,6 +16,8 @@ unsigned int localPort = 5000;               // Port to listen on
 
 WiFiUDP Udp;
 char packetBuffer[255];
+IPAddress senderIP;
+unsigned int senderPort;
 
 struct InductorPath
 {
@@ -168,6 +170,10 @@ void loop() {
   if (packetSize) {
     Serial.print("Received packet of size ");
     Serial.println(packetSize);
+    
+    // Get sender information for response
+    senderIP = Udp.remoteIP();
+    senderPort = Udp.remotePort();
 
     // Read the packet into the buffer
     int len = Udp.read(packetBuffer, 255);
@@ -177,8 +183,12 @@ void loop() {
 
     Serial.print("Packet Contents: ");
     Serial.println(packetBuffer);
+    Serial.print("From IP: ");
+    Serial.print(senderIP);
+    Serial.print(", Port: ");
+    Serial.println(senderPort);
 
-    // Parse string "Current,Pf"
+    // Try to parse as "Current,Pf" format first
     if (sscanf(packetBuffer, "%f,%f", &targetCurrent, &targetPf) == 2) {
       Serial.print("Parsed Current: ");
       Serial.println(targetCurrent);
@@ -192,8 +202,54 @@ void loop() {
       float targetL = sqrt(targetZ * targetZ - targetR * targetR) / 0.31416;
       selectBestPath(targetL, targetR);
       Serial.println("Best path selected based on new data.");
-    } else {
-      Serial.println("Failed to parse packet.");
+    } 
+    // Try to parse as "R:value,L:value" format for direct R-L configuration
+    else {
+      float directR, directL;
+      if (sscanf(packetBuffer, "R:%f,L:%f", &directR, &directL) == 2) {
+        Serial.print("Direct R-L Configuration Received:");
+        Serial.print(" R=");
+        Serial.print(directR, 4);
+        Serial.print(" Ohms, L=");
+        Serial.print(directL, 4);
+        Serial.println(" H");
+        
+        // Use direct values for path selection
+        selectBestPath(directL, directR);
+        
+        // Send confirmation back to PC via UDP
+        Serial.println("CONFIRMATION: R-L Configuration Applied Successfully");
+        Serial.print("Selected Inductance Path: ");
+        Serial.println(instantaneousInductancePath);
+        Serial.print("Selected Resistance Path: ");
+        Serial.println(instantaneousResistancePath);
+        
+        // Calculate actual values achieved
+        float actualR = iPaths[instantaneousInductancePath].resistance + rPaths[instantaneousResistancePath].resistance;
+        float actualL = iPaths[instantaneousInductancePath].inductance;
+        
+        Serial.print("Actual R: ");
+        Serial.print(actualR, 4);
+        Serial.print(" Ohms, Actual L: ");
+        Serial.print(actualL, 4);
+        Serial.println(" H");
+        
+        // Send UDP confirmation back to sender
+        String confirmationMsg = "CONFIRMATION: R-L Configuration Applied Successfully\n";
+        confirmationMsg += "Inductance Path: " + String(instantaneousInductancePath) + "\n";
+        confirmationMsg += "Resistance Path: " + String(instantaneousResistancePath) + "\n";
+        confirmationMsg += "Actual R: " + String(actualR, 4) + " Ohms\n";
+        confirmationMsg += "Actual L: " + String(actualL, 4) + " H\n";
+        confirmationMsg += "R-L_CONFIG_COMPLETE";
+        
+        Udp.beginPacket(senderIP, senderPort);
+        Udp.print(confirmationMsg);
+        Udp.endPacket();
+        
+        Serial.println("Confirmation sent back to PC via UDP");
+      } else {
+        Serial.println("Failed to parse packet in any known format.");
+      }
     }
   } 
   // The loop will continue to run, checking for new packets on each iteration.

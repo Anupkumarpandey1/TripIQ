@@ -25,6 +25,9 @@ def test_backend():
     backend.error_occurred.connect(
         lambda err: print(f"Error: {err}")
     )
+    backend.rl_config_confirmed.connect(
+        lambda msg: print(f"R-L Config Confirmed: {msg}")
+    )
     
     # Connect to ESP32
     print("Connecting to ESP32...")
@@ -44,8 +47,13 @@ def test_backend():
         
         # 2. Set power factor
         print("2. Setting power factor to 0.85...")
-        backend.set_power_factor(0.85)
+        backend.set_power_factor(1000, 0.85)
         time.sleep(1)
+        
+        # 2.5. Test variable R-L configuration
+        print("2.5. Testing variable R-L configuration...")
+        backend.set_variable_rl_configuration(30, 0.0120)
+        time.sleep(3)  # Wait for confirmation
         
         # 3. Start short circuit test
         print("3. Starting short circuit test with 3000A...")

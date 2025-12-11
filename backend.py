@@ -14,6 +14,7 @@ class ESP32Backend(QObject):
     data_received = pyqtSignal(dict)  # {time, temp, current, voltage, etc}
     command_sent = pyqtSignal(str)  # command sent confirmation
     error_occurred = pyqtSignal(str)  # error message
+    rl_config_confirmed = pyqtSignal(str)  # R-L configuration confirmation
 
     def __init__(self, esp_ip="192.168.137.187", port=5000):
         super().__init__()
@@ -21,14 +22,26 @@ class ESP32Backend(QObject):
         self.port = port
         self.client = None
         self.connected = False
-        # No buffer or receive thread needed for one-way UDP
+        self.receive_thread = None
+        self.running = False
+        # Data storage
+        self.time_vals = []
+        self.temp_vals = []
+        self.current_vals = []
+        self.voltage_vals = []
 
     def connect(self):
-        """Create UDP socket for sending commands."""
+        """Create UDP socket for sending commands and start receive thread."""
         try:
             # Use SOCK_DGRAM for UDP
             self.client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             self.connected = True
+            self.running = True
+            
+            # Start receive thread for confirmations
+            self.receive_thread = threading.Thread(target=self._receive_data, daemon=True)
+            self.receive_thread.start()
+            
             self.connection_status_changed.emit(True, f"UDP socket created for {self.esp_ip}:{self.port}")
             return True
         except Exception as e:
@@ -39,6 +52,11 @@ class ESP32Backend(QObject):
     def disconnect(self):
         """Disconnect from ESP32"""
         self.connected = False
+        self.running = False
+        
+        if self.receive_thread and self.receive_thread.is_alive():
+            self.receive_thread.join(timeout=1)
+            
         if self.client:
             try:
                 self.client.close()
@@ -46,6 +64,61 @@ class ESP32Backend(QObject):
                 self.error_occurred.emit(f"Error closing socket: {str(e)}")
             self.client = None
         self.connection_status_changed.emit(False, "Disconnected")
+    
+    def _receive_data(self):
+        """Receive data from ESP32 in background thread"""
+        buffer = ""
+        while self.running and self.connected:
+            try:
+                if self.client:
+                    # Set socket timeout for non-blocking receive
+                    self.client.settimeout(1.0)
+                    data, addr = self.client.recvfrom(1024)
+                    if data:
+                        message = data.decode('utf-8').strip()
+                        
+                        # Handle different types of messages
+                        if "R-L_CONFIG_COMPLETE" in message:
+                            self.rl_config_confirmed.emit("R-L Configuration completed successfully!")
+                        elif "CONFIRMATION:" in message:
+                            self.rl_config_confirmed.emit(message)
+                        else:
+                            # Try to parse as sensor data
+                            try:
+                                parts = message.split(',')
+                                if len(parts) >= 3:
+                                    time_val = float(parts[0])
+                                    temp_val = float(parts[1])
+                                    current_val = float(parts[2])
+                                    voltage_val = float(parts[3]) if len(parts) > 3 else 0
+                                    
+                                    # Store data
+                                    self.time_vals.append(time_val)
+                                    self.temp_vals.append(temp_val)
+                                    self.current_vals.append(current_val)
+                                    self.voltage_vals.append(voltage_val)
+                                    
+                                    # Emit signal
+                                    data_dict = {
+                                        'time': time_val,
+                                        'temperature': temp_val,
+                                        'current': current_val,
+                                        'voltage': voltage_val
+                                    }
+                                    self.data_received.emit(data_dict)
+                            except (ValueError, IndexError):
+                                # Not sensor data, might be status message
+                                pass
+                                
+            except socket.timeout:
+                # Normal timeout, continue loop
+                continue
+            except Exception as e:
+                if self.running:  # Only emit error if we're still supposed to be running
+                    self.error_occurred.emit(f"Receive error: {str(e)}")
+                break
+                
+            time.sleep(0.1)
 
     def send_command(self, command):
         """Send command to ESP32 via UDP"""
@@ -111,7 +184,18 @@ class ESP32Backend(QObject):
             resistance: Resistance in Ohms
             inductance: Inductance in Henries
         """
-        command = f"CONFIG:RL,R:{resistance},L:{inductance}"
+        command = f"CONFIG:RL,{resistance},{inductance}"
+        return self.send_command(command)
+    
+    def set_variable_rl_configuration(self, resistance, inductance):
+        """
+        Set variable resistance and inductance configuration
+        Args:
+            resistance: Resistance in Ohms (12 to 50, integer only)
+            inductance: Inductance in Henries (0.0000 to 0.0214)
+        """
+        # Format: "R:value,L:value"
+        command = f"{resistance:.4f},{inductance:.4f}"
         return self.send_command(command)
     
     def stop_test(self):
