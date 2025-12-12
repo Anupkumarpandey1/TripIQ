@@ -31,10 +31,14 @@ class ESP32Backend(QObject):
         self.voltage_vals = []
 
     def connect(self):
-        """Create UDP socket for sending commands and start receive thread."""
+        """Create TCP connection to ESP32 and start receive thread."""
         try:
-            # Use SOCK_DGRAM for UDP
-            self.client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            # Use SOCK_STREAM for TCP
+            self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.client.settimeout(10)  # 10 second connection timeout
+            
+            # Connect to ESP32
+            self.client.connect((self.esp_ip, self.port))
             self.connected = True
             self.running = True
             
@@ -42,11 +46,11 @@ class ESP32Backend(QObject):
             self.receive_thread = threading.Thread(target=self._receive_data, daemon=True)
             self.receive_thread.start()
             
-            self.connection_status_changed.emit(True, f"UDP socket created for {self.esp_ip}:{self.port}")
+            self.connection_status_changed.emit(True, f"TCP connected to {self.esp_ip}:{self.port}")
             return True
         except Exception as e:
             self.connected = False
-            self.connection_status_changed.emit(False, f"Socket creation failed: {str(e)}")
+            self.connection_status_changed.emit(False, f"TCP connection failed: {str(e)}")
             return False
 
     def disconnect(self):
@@ -174,7 +178,7 @@ class ESP32Backend(QObject):
             current_value: Target current in Amperes
             power_factor: Value between 0.3 and 1.0
         """
-        command = f"{float(current_value)},{float(power_factor):.3f}"
+        command = f"{float(current_value)}\n{float(power_factor):.3f}"
         return self.send_command(command)
     
     def configure_rl_circuit(self, resistance, inductance):

@@ -1,5 +1,4 @@
 #include <WiFi.h>
-#include <WiFiUdp.h>
 
 #define ADC_1_PIN 32
 #define ADC_2_PIN 34
@@ -14,7 +13,8 @@ const char* ssid = "M14";         // Enter your WiFi name
 const char* password = "12345677"; // Enter your WiFi password
 unsigned int localPort = 5000;               // Port to listen on
 
-WiFiUDP Udp;
+WiFiServer server(5000);
+WiFiClient client;
 char packetBuffer[255];
 
 struct InductorPath
@@ -152,35 +152,45 @@ void setup() {
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
-    Serial.println("Waiting for connection"); // Added line
+    Serial.println("Waiting for connection");
   }
-  Serial.println("Connected"); // Added line
-  
-  Udp.begin(localPort);
+  Serial.println("Connected");
+  Serial.print("IP Address: ");
+  Serial.println(WiFi.localIP());
+
+  server.begin();
+  Serial.print("Listening on TCP port: ");
+  Serial.println(localPort);
 }
 
 void loop() {
-  // Wait for incoming packet from wifi
-  int packetSize = Udp.parsePacket();
-  
-  // This loop blocks until a packet is received
-  while(!packetSize) {
-    delay(10);
-    packetSize = Udp.parsePacket();
+  if (server.hasClient()) {
+    if (!client || !client.connected()) {
+      if (client) client.stop();
+      client = server.available();
+      Serial.println("New client connected");
+    }
   }
 
-  // After receiving pf and current from wifi:
-  int len = Udp.read(packetBuffer, 255);
-  if (len > 0) packetBuffer[len] = 0;
+  if (client && client.available()) {
+    // Read incoming data
+    int len = client.readBytesUntil('\n', packetBuffer, sizeof(packetBuffer) - 1);
+    packetBuffer[len] = 0;
 
-  // Parse string "Current,Pf" (e.g., "6.0,0.6")
-  sscanf(packetBuffer, "%f,%f", &targetCurrent, &targetPf);
+    // Parse string "Current,Pf" (e.g., "6.0,0.6")
+    sscanf(packetBuffer, "%f,%f", &targetCurrent, &targetPf);
 
-  Serial.println(packetBuffer);
-  float VRms = getVRms();
-  float targetZ = VRms/targetCurrent;
-  float targetR = targetPf * targetZ;
-  float targetL = sqrt(targetZ*targetZ - targetR*targetR) / 0.31416;
-  selectBestPath(targetL, targetR);
-  
+    Serial.print("Received: ");
+    Serial.println(packetBuffer);
+
+    // Perform calculations and set relays
+    float VRms = getVRms();
+    float targetZ = VRms / targetCurrent;
+    float targetR = targetPf * targetZ;
+    float targetL = sqrt(targetZ * targetZ - targetR * targetR) / 0.31416;
+    selectBestPath(targetL, targetR);
+
+    // Optional: Send a confirmation back to the client
+    client.println("Data received and processed.");
+  }
 }

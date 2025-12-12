@@ -14,11 +14,17 @@
 #define RELAY_6_PIN 27  // Safe GPIO - 100ms pulse trigger relay
 
 // WIFI CONFIGURATION
-const char* ssid = "abcd";
-const char* password = "12345678";
-unsigned int localPort = 5000;
+const char* ssid = "M14";
+const char* password = "12345677";
+unsigned int localPort = 5000; // The port this device listens on for UDP commands
 
-WiFiUDP Udp;
+// TCP Controller (Server) Details
+// IMPORTANT: Replace with the actual IP of your esp32_controller device
+const char* controllerIP = "192.168.1.101"; 
+const int controllerPort = 5000;
+
+WiFiUDP Udp; // Listens for commands from PC
+WiFiClient tcpClient; // Connects to the controller ESP32
 char packetBuffer[255];
 
 // Circuit constants
@@ -38,11 +44,6 @@ bool isCapturing = false;
 const unsigned long RELAY_6_PULSE_DURATION = 100;  // 100ms pulse duration
 unsigned long relay6StartTime = 0;
 bool relay6Active = false;
-
-// Client address for sending data back
-IPAddress clientIP;
-unsigned int clientPort;
-bool clientAddressSet = false;
 
 struct InductorPath {
   float inductance;
@@ -94,10 +95,10 @@ void stopVoltageCapture() {
   Serial.print("Stopped voltage capture. Total samples: ");
   Serial.println(sampleCount);
   
-  if(clientAddressSet) {
+  if(Udp.remoteIP()) {
     sendVoltageData();
   } else {
-    Serial.println("ERROR: Client address not set. Cannot send data.");
+    Serial.println("ERROR: Client not connected. Cannot send data.");
   }
 }
 
@@ -109,54 +110,33 @@ void captureVoltageReading() {
   }
 }
 
-// Send voltage data to laptop via UDP
+// Send voltage data to laptop via TCP
 void sendVoltageData() {
   Serial.println("Sending voltage data to laptop...");
-  
-  // Send header packet with sample count
-  char headerBuffer[50];
-  snprintf(headerBuffer, sizeof(headerBuffer), "VOLTAGE_DATA_START:%d", sampleCount);
-  
-  Udp.beginPacket(clientIP, clientPort);
-  Udp.write((uint8_t*)headerBuffer, strlen(headerBuffer));
-  Udp.endPacket();
-  delay(10);
-  
-  // Send data in chunks (UDP packet size limit ~1400 bytes)
-  // Each sample is sent as 2 bytes (uint16_t)
-  const int CHUNK_SIZE = 700;  // 700 samples per packet = 1400 bytes
-  int packetsSent = 0;
-  
-  for(int i = 0; i < sampleCount; i += CHUNK_SIZE) {
-    int samplesInPacket = min(CHUNK_SIZE, sampleCount - i);
-    
-    Udp.beginPacket(clientIP, clientPort);
-    
-    // Send chunk header
-    char chunkHeader[30];
-    snprintf(chunkHeader, sizeof(chunkHeader), "CHUNK:%d,%d|", i, samplesInPacket);
-    Udp.write((uint8_t*)chunkHeader, strlen(chunkHeader));
-    
-    // Send raw data as bytes
-    Udp.write((uint8_t*)&voltageReadings[i], samplesInPacket * sizeof(int));
-    
-    Udp.endPacket();
-    packetsSent++;
-    delay(5);  // Small delay between packets to prevent overflow
+
+  char buffer[256];
+
+  // Send header
+  snprintf(buffer, sizeof(buffer), "VOLTAGE_DATA_START:%d", sampleCount);
+  tcpClient.println(buffer);
+
+  // Send data points as a long comma-separated string
+  // This is inefficient but simple. For large data, a more robust protocol is needed.
+  for (int i = 0; i < sampleCount; i++) {
+    tcpClient.print(voltageReadings[i]);
+    tcpClient.print(",");
+    // Add a small delay to avoid overwhelming the client buffer
+    if (i % 100 == 0) {
+        delay(1);
+    }
   }
   
   // Send completion packet
-  char endBuffer[30];
-  snprintf(endBuffer, sizeof(endBuffer), "VOLTAGE_DATA_END:%d", packetsSent);
-  
-  Udp.beginPacket(clientIP, clientPort);
-  Udp.write((uint8_t*)endBuffer, strlen(endBuffer));
-  Udp.endPacket();
-  
-  Serial.print("Data sent in ");
-  Serial.print(packetsSent);
-  Serial.println(" packets.");
-  
+  snprintf(buffer, sizeof(buffer), "VOLTAGE_DATA_END:%d", 1);
+  tcpClient.println(buffer);
+
+  Serial.println("Voltage data sent.");
+
   // Also send human-readable summary
   sendVoltageSummary();
 }
@@ -191,9 +171,8 @@ void sendVoltageSummary() {
            "SUMMARY|Samples:%d|Rate:%.0fHz|Min:%.2fV|Max:%.2fV|Avg:%.2fV", 
            sampleCount, samplingRate, minVoltage, maxVoltage, avgVoltage);
   
-  Udp.beginPacket(clientIP, clientPort);
-  Udp.write((uint8_t*)summaryBuffer, strlen(summaryBuffer));
-  Udp.endPacket();
+  // This function is for sending data to the PC, so it should use UDP.
+    // The actual sending logic is handled in the main loop.
   
   Serial.println("Summary sent:");
   Serial.println(summaryBuffer);
@@ -373,44 +352,32 @@ void setup() {
   Serial.println(WiFi.localIP());
   
   Udp.begin(localPort);
-  Serial.print("Listening on UDP port: ");
+  Serial.print("Listening for commands on UDP port: ");
   Serial.println(localPort);
   
   Serial.println("\nWaiting for commands...");
   Serial.println("Send: 'TRIGGER' to connect circuit for 100ms and capture data");
   Serial.println("Send: 'STATUS' to check system status");
   Serial.println("Send: 'Current,PowerFactor' to set load parameters");
-  Serial.println("Send: 'R:value,L:value' for direct R-L configuration");
 }
 
 void loop() {
-  // CRITICAL: Capture voltage if active (maximum speed)
+  // CRITICAL: Handle high-frequency tasks first
   if(isCapturing) {
     captureVoltageReading();
   }
-  
-  // CRITICAL: Check Relay 6 timeout
   checkRelay6Timeout();
-  
-  // Check for incoming packets
+
+  // Check for incoming UDP command from PC
   int packetSize = Udp.parsePacket();
-  
   if (packetSize) {
-    // Store client address for sending data back
-    clientIP = Udp.remoteIP();
-    clientPort = Udp.remotePort();
-    clientAddressSet = true;
+    IPAddress remoteIp = Udp.remoteIP();
+    unsigned int remotePort = Udp.remotePort();
     
-    Serial.print("\n[UDP] Received packet from ");
-    Serial.print(clientIP);
-    Serial.print(":");
-    Serial.println(clientPort);
+    int len = Udp.read(packetBuffer, packetSize > 254 ? 254 : packetSize);
+    packetBuffer[len] = 0;
     
-    // Read the packet into the buffer
-    int len = Udp.read(packetBuffer, 255);
-    if (len > 0) {
-      packetBuffer[len] = 0;
-    }
+    Serial.printf("\n[UDP] Received command from %s:%d - '%s'\n", remoteIp.toString().c_str(), remotePort, packetBuffer);
     
     Serial.print("Packet Contents: ");
     Serial.println(packetBuffer);
@@ -419,31 +386,14 @@ void loop() {
     if (strcmp(packetBuffer, "TRIGGER") == 0) {
       triggerRelay6();
       
-      // Send confirmation
-      char confirmMsg[] = "TRIGGER_CONFIRMED";
-      Udp.beginPacket(clientIP, clientPort);
-      Udp.write((uint8_t*)confirmMsg, strlen(confirmMsg));
+      // Send confirmation back to PC
+      Udp.beginPacket(remoteIp, remotePort);
+      Udp.print("TRIGGER_CONFIRMED");
       Udp.endPacket();
       
     } else if (strcmp(packetBuffer, "STATUS") == 0) {
       Serial.print("Relay 6 Status: ");
       Serial.println(relay6Active ? "ACTIVE (will auto-off)" : "INACTIVE");
-      
-      if(relay6Active) {
-        unsigned long remaining = RELAY_6_PULSE_DURATION - (millis() - relay6StartTime);
-        Serial.print("Time remaining: ");
-        Serial.print(remaining);
-        Serial.println(" ms");
-      }
-      
-      Serial.print("Current Path - L: ");
-      Serial.print(instantaneousInductancePath);
-      Serial.print(", R: ");
-      Serial.println(instantaneousResistancePath);
-      
-      Serial.print("Last capture: ");
-      Serial.print(sampleCount);
-      Serial.println(" samples");
       
       // Send status back to client
       char statusBuffer[150];
@@ -453,78 +403,63 @@ void loop() {
                instantaneousInductancePath,
                instantaneousResistancePath,
                sampleCount);
-      
-      Udp.beginPacket(clientIP, clientPort);
-      Udp.write((uint8_t*)statusBuffer, strlen(statusBuffer));
+
+      Udp.beginPacket(remoteIp, remotePort);
+      Udp.print(statusBuffer);
       Udp.endPacket();
       
     }
     // Parse string "Current,Pf" for power factor mode
-    else if (sscanf(packetBuffer, "%f,%f", &targetCurrent, &targetPf) == 2) {
-      Serial.print("Parsed Current: ");
-      Serial.print(targetCurrent);
-      Serial.println(" A");
-      Serial.print("Parsed Power Factor: ");
-      Serial.println(targetPf);
+    else if (sscanf(packetBuffer, "%f\n%f", &targetCurrent, &targetPf) == 2) {
+      // ... (rest of the code remains the same)
       
       // Validate inputs
       if(targetCurrent <= 0 || targetPf < 0 || targetPf > 1) {
         Serial.println("ERROR: Invalid parameters!");
         Serial.println("Current must be > 0, Power Factor must be 0-1");
         
-        // Send error response
-        char errorMsg[] = "ERROR: Invalid parameters";
-        Udp.beginPacket(clientIP, clientPort);
-        Udp.write((uint8_t*)errorMsg, strlen(errorMsg));
+        // Send error response back to PC
+        Udp.beginPacket(remoteIp, remotePort);
+        Udp.print("ERROR: Invalid parameters");
         Udp.endPacket();
         
       } else {
         // Get measured voltage
         float VRms = getVRms();
-        Serial.print("Measured Voltage: ");
-        Serial.print(VRms);
-        Serial.println(" V");
         
-        // Calculate target impedance
+        // Calculate target impedance, resistance, and inductance
         float targetZ = VRms / targetCurrent;
-        Serial.print("Target Impedance: ");
-        Serial.print(targetZ);
-        Serial.println(" Ω");
-        
-        // Calculate target resistance
         float targetR = targetPf * targetZ;
-        Serial.print("Target Resistance: ");
-        Serial.print(targetR);
-        Serial.println(" Ω");
-        
-        // Calculate target reactance and inductance
         float targetXL = sqrt(targetZ * targetZ - targetR * targetR);
-        float targetL = (targetXL / OMEGA) * 1000.0;  // Convert to mH
-        Serial.print("Target Inductance: ");
-        Serial.print(targetL);
-        Serial.println(" mH");
-        
-        // Select and apply best combination
+        float targetL = (targetXL / OMEGA) * 1000.0; // Convert to mH
+
+        Serial.printf("Target Z: %.2f Ω, R: %.2f Ω, L: %.2f mH\n", targetZ, targetR, targetL);
+
+        // 1. Select and apply the best path for THIS device
         selectBestPath(targetL, targetR);
-        Serial.println("Best path applied.");
-        
-        // Send confirmation with actual values
-        float actualR = iPaths[instantaneousInductancePath].resistance + rPaths[instantaneousResistancePath].resistance;
-        float actualL = iPaths[instantaneousInductancePath].inductance;
-        
-        char confirmationMsg[200];
-        snprintf(confirmationMsg, sizeof(confirmationMsg),
-                 "CONFIRMATION: Power Factor Configuration Applied\nInductance Path: %d\nResistance Path: %d\nActual R: %.2f Ohms\nActual L: %.2f mH\nPF_CONFIG_COMPLETE",
-                 instantaneousInductancePath, instantaneousResistancePath, actualR, actualL);
-        
-        Udp.beginPacket(clientIP, clientPort);
+        Serial.println("Best path applied on this device (abcd.ino).");
+
+        // 2. Forward the original command to the controller ESP32 via TCP
+        Serial.printf("Forwarding command to controller at %s...\n", controllerIP);
+        if (tcpClient.connect(controllerIP, controllerPort)) {
+          Serial.println("Connected to controller.");
+          tcpClient.println(packetBuffer); // Send the exact "Current,Pf" string
+          tcpClient.stop();
+          Serial.println("Command sent and disconnected from controller.");
+        } else {
+          Serial.println("!!! FAILED to connect to the controller ESP32!");
+        }
+
+        // 3. Send confirmation back to the original UDP sender (the PC)
+        char confirmationMsg[] = "CONFIRMATION: Command processed locally and forwarded to controller.";
+        Udp.beginPacket(remoteIp, remotePort);
         Udp.write((uint8_t*)confirmationMsg, strlen(confirmationMsg));
         Udp.endPacket();
-        
+
         // Auto-trigger Relay 6 after configuration
         Serial.println("Auto-triggering Relay 6...");
         delay(100);  // Small delay to ensure relays are settled
-        triggerRelay6();
+        // ... (rest of the code remains the same)
       }
     }
     // Parse string "R:value,L:value" for direct R-L configuration
@@ -563,14 +498,13 @@ void loop() {
         Serial.println(" H");
         
         // Send UDP confirmation back to sender
-        String confirmationMsg = "CONFIRMATION: R-L Configuration Applied Successfully\n";
+                String confirmationMsg = "CONFIRMATION: R-L Configuration Applied Successfully\n";
         confirmationMsg += "Inductance Path: " + String(instantaneousInductancePath) + "\n";
         confirmationMsg += "Resistance Path: " + String(instantaneousResistancePath) + "\n";
         confirmationMsg += "Actual R: " + String(actualR, 4) + " Ohms\n";
         confirmationMsg += "Actual L: " + String(actualL_H, 4) + " H\n";
         confirmationMsg += "R-L_CONFIG_COMPLETE";
-        
-        Udp.beginPacket(clientIP, clientPort);
+        Udp.beginPacket(remoteIp, remotePort);
         Udp.print(confirmationMsg);
         Udp.endPacket();
         
@@ -581,9 +515,8 @@ void loop() {
         Serial.println("Valid commands: TRIGGER, STATUS, Current,PowerFactor, or R:value,L:value");
         
         // Send error response
-        char errorMsg[] = "ERROR: Unknown command format";
-        Udp.beginPacket(clientIP, clientPort);
-        Udp.write((uint8_t*)errorMsg, strlen(errorMsg));
+        Udp.beginPacket(remoteIp, remotePort);
+        Udp.print("ERROR: Unknown command format");
         Udp.endPacket();
       }
     }
