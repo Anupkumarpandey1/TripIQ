@@ -16,7 +16,7 @@ class ESP32Backend(QObject):
     error_occurred = pyqtSignal(str)  # error message
     rl_config_confirmed = pyqtSignal(str)  # R-L configuration confirmation
 
-    def __init__(self, esp_ip="192.168.137.187", port=5000):
+    def __init__(self, esp_ip="10.91.136.24", port=8888):
         super().__init__()
         self.esp_ip = esp_ip
         self.port = port
@@ -77,42 +77,45 @@ class ESP32Backend(QObject):
                 if self.client:
                     # Set socket timeout for non-blocking receive
                     self.client.settimeout(1.0)
-                    data, addr = self.client.recvfrom(1024)
+                    data = self.client.recv(1024)  # Use recv for TCP
                     if data:
-                        message = data.decode('utf-8').strip()
+                        message = data.decode('utf-8')
+                        buffer += message
                         
-                        # Handle different types of messages
-                        if "R-L_CONFIG_COMPLETE" in message:
-                            self.rl_config_confirmed.emit("R-L Configuration completed successfully!")
-                        elif "CONFIRMATION:" in message:
-                            self.rl_config_confirmed.emit(message)
-                        else:
-                            # Try to parse as sensor data
-                            try:
-                                parts = message.split(',')
-                                if len(parts) >= 3:
-                                    time_val = float(parts[0])
-                                    temp_val = float(parts[1])
-                                    current_val = float(parts[2])
-                                    voltage_val = float(parts[3]) if len(parts) > 3 else 0
-                                    
-                                    # Store data
-                                    self.time_vals.append(time_val)
-                                    self.temp_vals.append(temp_val)
-                                    self.current_vals.append(current_val)
-                                    self.voltage_vals.append(voltage_val)
-                                    
-                                    # Emit signal
-                                    data_dict = {
-                                        'time': time_val,
-                                        'temperature': temp_val,
-                                        'current': current_val,
-                                        'voltage': voltage_val
-                                    }
-                                    self.data_received.emit(data_dict)
-                            except (ValueError, IndexError):
-                                # Not sensor data, might be status message
-                                pass
+                        # Process complete messages delimited by '@'
+                        while '@' in buffer:
+                            line, buffer = buffer.split('@', 1)
+                            line = line.strip()
+                            
+                            if line:
+                                # Emit the raw line to the frontend for logging
+                                self.data_received.emit({'raw': line})
+                                
+                                # Handle specific messages
+                                if "R-L_CONFIG_COMPLETE" in line:
+                                    self.rl_config_confirmed.emit("R-L Configuration completed successfully!")
+                                elif "CONFIRMATION:" in line:
+                                    self.rl_config_confirmed.emit(line)
+                                # Add other specific message handling here if needed
+                        
+                        # Also handle newline characters for robustness
+                        while '\n' in buffer or '\r' in buffer:
+                            if '\n' in buffer:
+                                line, buffer = buffer.split('\n', 1)
+                            else:
+                                line, buffer = buffer.split('\r', 1)
+                            line = line.strip()
+                            
+                            if line:
+                                # Emit the raw line to the frontend for logging
+                                self.data_received.emit({'raw': line})
+                                
+                                # Handle specific messages
+                                if "R-L_CONFIG_COMPLETE" in line:
+                                    self.rl_config_confirmed.emit("R-L Configuration completed successfully!")
+                                elif "CONFIRMATION:" in line:
+                                    self.rl_config_confirmed.emit(line)
+                                # Add other specific message handling here if needed
                                 
             except socket.timeout:
                 # Normal timeout, continue loop
@@ -125,14 +128,14 @@ class ESP32Backend(QObject):
             time.sleep(0.1)
 
     def send_command(self, command):
-        """Send command to ESP32 via UDP"""
+        """Send command to ESP32 via TCP"""
         if not self.connected or not self.client:
             self.error_occurred.emit("Not connected. Cannot send command.")
             return False
         
         try:
-            # For UDP, we use sendto()
-            self.client.sendto(command.encode('utf-8'), (self.esp_ip, self.port))
+            # For TCP, we use send()
+            self.client.send(command.encode('utf-8'))
             self.command_sent.emit(command.strip())
             return True
         except Exception as e:

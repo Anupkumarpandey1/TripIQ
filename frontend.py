@@ -188,6 +188,11 @@ class TestConfigDialog(QDialog):
             info_label.setWordWrap(True)
             info_label.setStyleSheet(f"color: {COLOR_TEXT_SECONDARY}; padding: 10px;")
             form_layout.addRow(info_label)
+        elif "Just a Test" in self.test_name:
+            info_label = QLabel("This is for testing purposes only.")
+            info_label.setWordWrap(True)
+            info_label.setStyleSheet(f"color: {COLOR_TEXT_SECONDARY}; padding: 10px;")
+            form_layout.addRow(info_label)
         
         layout.addLayout(form_layout)
         
@@ -231,6 +236,8 @@ class TestConfigDialog(QDialog):
             
         elif "Calibration" in self.test_name:
             config['calibrate'] = True
+        elif "Just a Test" in self.test_name:
+            config['test'] = True
         
         return config
 
@@ -540,6 +547,10 @@ def set_global_style(app):
 
 
 
+from tcp_client import TCPClient
+import numpy as np
+from collections import deque
+
 # ===== Power Factor Visualization Window (Standalone - Exact copy of recieve.py) =====
 class PowerFactorWindow(QMainWindow):
     def __init__(self, current_value, power_factor, backend, parent=None):
@@ -547,7 +558,16 @@ class PowerFactorWindow(QMainWindow):
         self.current_value = current_value
         self.power_factor = power_factor
         self.backend = backend
-        self.animation_time = 0
+        
+        # Data storage
+        self.voltage_data = deque(maxlen=500) # Store last 500 voltage points
+        self.time_data = deque(maxlen=500) # Corresponding time points
+        self.start_time = None
+
+        # TCP Client
+        self.tcp_client = TCPClient(host="10.91.136.24", port=8888)
+        self.tcp_client.new_voltage_data.connect(self.handle_new_data)
+        self.tcp_client.connection_status_changed.connect(self.update_connection_status)
         
         self.setWindowTitle("⚡ ESP32 Power Factor Monitor")
         self.resize(1200, 850)
@@ -668,10 +688,19 @@ class PowerFactorWindow(QMainWindow):
         self.current_input.valueChanged.connect(self.update_current)
         current_layout.addWidget(current_label)
         current_layout.addWidget(self.current_input)
+
+        # Connection Status & Button
+        self.connection_status_label = QLabel("Status: Disconnected")
+        self.connection_status_label.setStyleSheet("color: #f38ba8; font-weight: bold;")
+        self.connect_button = QPushButton("Connect to ESP32")
+        self.connect_button.clicked.connect(self.toggle_connection)
         
         pf_display_layout.addWidget(self.pf_value_label)
         pf_display_layout.addWidget(self.phase_diff_label)
         pf_display_layout.addLayout(current_layout)
+        pf_display_layout.addSpacing(10)
+        pf_display_layout.addWidget(self.connection_status_label)
+        pf_display_layout.addWidget(self.connect_button)
         
         # Right side - Slider
         pf_slider_layout = QVBoxLayout()
@@ -707,11 +736,12 @@ class PowerFactorWindow(QMainWindow):
         
         pf_layout.addLayout(pf_control_layout)
         
-        # Waveform canvas - exact same as recieve.py
+        # Waveform canvas
         try:
             import matplotlib.pyplot as plt
             from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-            
+            import time
+
             self.fig_waveform, self.ax_waveform = plt.subplots(figsize=(12, 5), facecolor='#1e1e2e')
             self.ax_waveform.set_facecolor('#313244')
             self.canvas_waveform = FigureCanvas(self.fig_waveform)
@@ -721,12 +751,12 @@ class PowerFactorWindow(QMainWindow):
             pf_group.setLayout(pf_layout)
             main_layout.addWidget(pf_group)
             
-            # Animation timer
-            self.anim_timer = QTimer()
-            self.anim_timer.timeout.connect(self.animate_waveform)
-            self.anim_timer.start(50)  # 20 FPS
+            # Update timer for the plot
+            self.plot_timer = QTimer()
+            self.plot_timer.timeout.connect(self.draw_waveform)
+            self.plot_timer.start(100) # Update plot 10 times per second
             
-            self.draw_waveform()
+            self.draw_waveform() # Initial draw
         except ImportError:
             error_label = QLabel("Matplotlib not installed. Cannot show waveform visualization.")
             error_label.setStyleSheet("color: #f38ba8; font-size: 14px; padding: 20px;")
@@ -756,71 +786,88 @@ class PowerFactorWindow(QMainWindow):
     
     def calculate_phase_diff(self, pf):
         """Calculate phase difference in degrees from power factor"""
-        import numpy as np
         phase_rad = np.arccos(np.clip(pf, 0, 1))
         phase_deg = np.degrees(phase_rad)
         return phase_deg
-    
-    def animate_waveform(self):
-        import numpy as np
-        self.animation_time += 0.15  # Increased from 0.05 to 0.15 for 3x faster animation
-        if self.animation_time > 2 * np.pi:
-            self.animation_time = 0
-        self.draw_waveform()
-    
+
+    def toggle_connection(self):
+        if self.tcp_client.is_connected():
+            self.tcp_client.disconnect()
+        else:
+            self.tcp_client.connect()
+
+    def update_connection_status(self, connected):
+        if connected:
+            self.connection_status_label.setText("Status: Connected")
+            self.connection_status_label.setStyleSheet("color: #a6e3a1; font-weight: bold;")
+            self.connect_button.setText("Disconnect")
+            self.start_time = time.time()
+            self.voltage_data.clear()
+            self.time_data.clear()
+        else:
+            self.connection_status_label.setText("Status: Disconnected")
+            self.connection_status_label.setStyleSheet("color: #f38ba8; font-weight: bold;")
+            self.connect_button.setText("Connect to ESP32")
+
+    def handle_new_data(self, voltage):
+        if self.start_time is None: # Should be set on connection, but as a fallback
+            self.start_time = time.time()
+        
+        current_time = time.time() - self.start_time
+        self.voltage_data.append(voltage)
+        self.time_data.append(current_time)
+
+    def closeEvent(self, event):
+        """Ensure TCP client is disconnected when window is closed."""
+        self.tcp_client.disconnect()
+        super().closeEvent(event)
+
     def draw_waveform(self):
-        """Draw waveform - higher frequency (6 cycles like 50Hz)"""
-        import numpy as np
+        """Draw waveform from live data"""
         self.ax_waveform.clear()
-        
-        # Generate time array for 6 complete cycles (3x higher frequency)
-        t = np.linspace(0, 12 * np.pi, 1000)
-        
-        # Voltage waveform (reference, phase = 0) - animated
-        voltage = np.sin(t + self.animation_time)
-        
-        # Current waveform (lagging by phase difference) - animated
-        phase_rad = np.arccos(np.clip(self.power_factor, 0, 1))
-        current = np.sin(t - phase_rad + self.animation_time)
-        
-        # Plot waveforms - exact same colors as recieve.py
-        self.ax_waveform.plot(t, voltage, color='#f38ba8', linewidth=2.5, label='Voltage', alpha=0.9)
-        self.ax_waveform.plot(t, current, color='#a6e3a1', linewidth=2.5, label='Current', alpha=0.9)
-        
-        # Find peaks in visible range for annotation
-        voltage_peaks = np.where((voltage[1:-1] > voltage[:-2]) & (voltage[1:-1] > voltage[2:]))[0] + 1
-        current_peaks = np.where((current[1:-1] > current[:-2]) & (current[1:-1] > current[2:]))[0] + 1
-        
-        if len(voltage_peaks) > 0 and len(current_peaks) > 0:
-            v_peak_idx = voltage_peaks[0]
-            c_peak_idx = current_peaks[0]
+
+        if not self.voltage_data:
+            # Show a placeholder message if no data is available
+            self.ax_waveform.text(0.5, 0.5, 'Not Connected or No Data Received...',
+                                  ha='center', va='center', color='#cdd6f4', fontsize=14)
+        else:
+            # Plot Voltage (Real Data)
+            self.ax_waveform.plot(self.time_data, self.voltage_data, color='#f38ba8', linewidth=2, label='Voltage (Live)')
+
+            # Calculate and Plot Current (Calculated)
+            phase_rad = np.arccos(np.clip(self.power_factor, 0, 1))
             
-            # Draw vertical lines at peaks
-            self.ax_waveform.axvline(x=t[v_peak_idx], color='#f38ba8', linestyle='--', alpha=0.4, linewidth=1.5)
-            self.ax_waveform.axvline(x=t[c_peak_idx], color='#a6e3a1', linestyle='--', alpha=0.4, linewidth=1.5)
-            
-            # Phase difference arrow
-            if c_peak_idx > v_peak_idx:
-                arrow_y = -0.5
-                self.ax_waveform.annotate('', xy=(t[c_peak_idx], arrow_y), xytext=(t[v_peak_idx], arrow_y),
-                                          arrowprops=dict(arrowstyle='<->', color='#fab387', lw=2.5))
+            if len(self.voltage_data) > 2:
+                v_peak_real = np.max(self.voltage_data)
+                current_peak_calc = self.current_input.value() * np.sqrt(2) # I = I_rms * sqrt(2)
                 
-                phase_deg = self.calculate_phase_diff(self.power_factor)
-                mid_point = (t[v_peak_idx] + t[c_peak_idx]) / 2
-                self.ax_waveform.text(mid_point, arrow_y - 0.25, f'φ = {phase_deg:.1f}°', 
-                                     color='#fab387', fontsize=12, ha='center', fontweight='bold',
-                                     bbox=dict(boxstyle='round,pad=0.5', facecolor='#1e1e2e', 
-                                              edgecolor='#fab387', linewidth=2))
-        
-        self.ax_waveform.set_xlabel("Time (ms)", fontsize=12, color='#cdd6f4', fontweight='bold')
+                time_for_calc = np.linspace(self.time_data[0], self.time_data[-1], len(self.time_data))
+                
+                v_np = np.array(self.voltage_data)
+                zero_crossings = np.where(np.diff(np.sign(v_np)))[0]
+                if len(zero_crossings) > 1:
+                    time_diffs = np.diff(np.array(self.time_data)[zero_crossings])
+                    avg_period = np.mean(time_diffs) * 2
+                    frequency = 1 / avg_period if avg_period > 0 else 50
+                else:
+                    frequency = 50 # Default if no crossings found
+
+                omega = 2 * np.pi * frequency
+                current_calculated = current_peak_calc * np.sin(omega * time_for_calc - phase_rad)
+
+                self.ax_waveform.plot(time_for_calc, current_calculated, color='#a6e3a1', linewidth=2, label=f'Current (Calculated)', linestyle='--')
+
+        self.ax_waveform.set_xlabel("Time (s)", fontsize=12, color='#cdd6f4', fontweight='bold')
         self.ax_waveform.set_ylabel("Amplitude", fontsize=12, color='#cdd6f4', fontweight='bold')
         self.ax_waveform.set_title(f"⚡ Live Voltage & Current Waveforms (PF = {self.power_factor:.2f})", 
                                    fontsize=14, color='#89b4fa', pad=15, fontweight='bold')
         self.ax_waveform.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
         self.ax_waveform.legend(loc='upper right', framealpha=0.9, facecolor='#313244', 
                                edgecolor='#89b4fa', fontsize=11, frameon=True)
-        self.ax_waveform.set_ylim(-1.4, 1.4)
-        self.ax_waveform.set_xlim(0, 12 * np.pi)
+        
+        if self.voltage_data:
+            self.ax_waveform.set_xlim(self.time_data[0], self.time_data[-1])
+
         self.ax_waveform.tick_params(colors='#cdd6f4', labelsize=10)
         
         self.fig_waveform.tight_layout()
@@ -961,7 +1008,7 @@ class MCBTestingSoftware(QMainWindow):
         
         config_layout = QFormLayout()
         
-        self.ip_input = QLineEdit("192.168.137.65")
+        self.ip_input = QLineEdit("10.91.136.24")
         self.ip_input.setPlaceholderText("ESP32 IP Address")
         self.ip_input.setStyleSheet(f"""
             QLineEdit {{
@@ -979,7 +1026,7 @@ class MCBTestingSoftware(QMainWindow):
         
         self.port_input = QSpinBox()
         self.port_input.setRange(1000, 65535)
-        self.port_input.setValue(5000)
+        self.port_input.setValue(8888)
         self.port_input.setStyleSheet(f"""
             QSpinBox {{
                 background: {COLOR_BACKGROUND_ELEVATED};
@@ -1144,6 +1191,9 @@ class MCBTestingSoftware(QMainWindow):
             ("Calibration & Verification", 
              "System calibration and accuracy verification",
              "✓", COLOR_SUCCESS),
+            ("Just a Test",
+             "A simple test for development and debugging purposes",
+             "🐞", COLOR_WARNING),
         ]
         
         row, col = 0, 0
@@ -1235,6 +1285,41 @@ class MCBTestingSoftware(QMainWindow):
         
         self.test_details_text = QTextEdit()
         self.test_details_text.setReadOnly(True)
+
+        # Log box for received data
+        log_group = QGroupBox("ESP32 Output Log")
+        log_group.setStyleSheet(f"""
+            QGroupBox {{
+                color: {COLOR_PRIMARY};
+                font-weight: bold;
+                border: 1px solid {COLOR_BORDER};
+                border-radius: 8px;
+                margin-top: 10px;
+                padding-top: 15px;
+            }}
+            QGroupBox::title {{
+                subcontrol-origin: margin;
+                left: 15px;
+                padding: 0 5px;
+            }}
+        """)
+        log_layout = QVBoxLayout()
+        self.log_box = QTextEdit()
+        self.log_box.setReadOnly(True)
+        self.log_box.setStyleSheet(f"""
+            QTextEdit {{
+                background: {COLOR_BACKGROUND_SECONDARY};
+                color: {COLOR_TEXT_SECONDARY};
+                border: none;
+                font-family: Consolas, 'Courier New', monospace;
+                font-size: 13px;
+                padding: 10px;
+            }}
+        """)
+        self.log_box.setPlaceholderText("Waiting for data from ESP32...")
+        self.log_box.setMinimumHeight(150)
+        log_layout.addWidget(self.log_box)
+        log_group.setLayout(log_layout)
         
         # Action buttons
         action_layout = QHBoxLayout()
@@ -1259,6 +1344,7 @@ class MCBTestingSoftware(QMainWindow):
         action_layout.addStretch()
         
         details_layout.addWidget(self.test_details_text)
+        details_layout.addWidget(log_group)
         details_layout.addLayout(action_layout)
         
         details_container.setLayout(details_layout)
@@ -1326,8 +1412,13 @@ class MCBTestingSoftware(QMainWindow):
     
     def on_data_received(self, data):
         """Handle data received from ESP32"""
-        print(f"Data received: {data}")
-        # Update UI with received data if needed
+        if 'raw' in data:
+            self.log_box.append(data['raw'])
+        else:
+            # Handle other data formats if needed
+            self.log_box.append(str(data))
+        # Auto-scroll to the bottom
+        self.log_box.verticalScrollBar().setValue(self.log_box.verticalScrollBar().maximum())
     
     def on_command_sent(self, command):
         """Handle command sent confirmation"""
@@ -1380,6 +1471,7 @@ class MCBTestingSoftware(QMainWindow):
         """
         
         self.test_details_text.setHtml(details)
+        self.log_box.clear() # Clear logs for the new test
         self.stacked_widget.slideIn(2)
     
     def configure_test(self):
@@ -1455,6 +1547,8 @@ class MCBTestingSoftware(QMainWindow):
             )
         elif "Calibration" in self.current_test_name:
             success = self.backend.calibrate_sensors()
+        elif "Just a Test" in self.current_test_name:
+            success = self.backend.send_command("TEST:JUST_A_TEST")
         
         if success:
             self.test_running = True

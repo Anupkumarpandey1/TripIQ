@@ -14,18 +14,12 @@
 #define RELAY_6_PIN 27  // Safe GPIO - 100ms pulse trigger relay
 
 // WIFI CONFIGURATION
-const char* ssid = "M14";
-const char* password = "12345677";
-unsigned int localPort = 5000; // The port this device listens on for UDP commands
+const char* ssid = "M14"; // <-- IMPORTANT: SET YOUR WIFI NAME
+const char* password = "12345677"; // <-- IMPORTANT: SET YOUR WIFI PASSWORD
 
-// TCP Controller (Server) Details
-// IMPORTANT: Replace with the actual IP of your esp32_controller device
-const char* controllerIP = "192.168.1.101"; 
-const int controllerPort = 5000;
-
-WiFiUDP Udp; // Listens for commands from PC
-WiFiClient tcpClient; // Connects to the controller ESP32
-char packetBuffer[255];
+// TCP Server for Python App
+WiFiServer server(8888);
+WiFiClient client;
 
 // Circuit constants
 const float FREQ = 50.0;  // 50 Hz
@@ -95,10 +89,11 @@ void stopVoltageCapture() {
   Serial.print("Stopped voltage capture. Total samples: ");
   Serial.println(sampleCount);
   
-  if(Udp.remoteIP()) {
+  // Send data if a client is connected
+  if (client && client.connected()) {
     sendVoltageData();
   } else {
-    Serial.println("ERROR: Client not connected. Cannot send data.");
+    Serial.println("No client connected. Data not sent.");
   }
 }
 
@@ -110,35 +105,26 @@ void captureVoltageReading() {
   }
 }
 
-// Send voltage data to laptop via TCP
+// Send voltage data to the connected Python client
 void sendVoltageData() {
-  Serial.println("Sending voltage data to laptop...");
-
-  char buffer[256];
-
-  // Send header
-  snprintf(buffer, sizeof(buffer), "VOLTAGE_DATA_START:%d", sampleCount);
-  tcpClient.println(buffer);
-
-  // Send data points as a long comma-separated string
-  // This is inefficient but simple. For large data, a more robust protocol is needed.
-  for (int i = 0; i < sampleCount; i++) {
-    tcpClient.print(voltageReadings[i]);
-    tcpClient.print(",");
-    // Add a small delay to avoid overwhelming the client buffer
-    if (i % 100 == 0) {
-        delay(1);
-    }
+  if (!client || !client.connected()) {
+    Serial.println("Cannot send data, no client.");
+    return;
   }
-  
-  // Send completion packet
-  snprintf(buffer, sizeof(buffer), "VOLTAGE_DATA_END:%d", 1);
-  tcpClient.println(buffer);
 
-  Serial.println("Voltage data sent.");
+  Serial.println("Sending voltage data to Python client...");
 
-  // Also send human-readable summary
-  sendVoltageSummary();
+  // Send each reading as a new line
+  for (int i = 0; i < sampleCount; i++) {
+    // Convert the integer reading to a scaled voltage value
+    float voltage = (voltageReadings[i] * ADC_VREF / ADC_MAX) * VOLTAGE_SCALE_FACTOR;
+    client.println(voltage, 2); // Send as float with 2 decimal places
+    
+    // A small delay can help prevent overwhelming the client
+    delay(1);
+  }
+
+  Serial.println("Voltage data sending complete.");
 }
 
 // Send voltage statistics summary
@@ -170,9 +156,6 @@ void sendVoltageSummary() {
   snprintf(summaryBuffer, sizeof(summaryBuffer), 
            "SUMMARY|Samples:%d|Rate:%.0fHz|Min:%.2fV|Max:%.2fV|Avg:%.2fV", 
            sampleCount, samplingRate, minVoltage, maxVoltage, avgVoltage);
-  
-  // This function is for sending data to the PC, so it should use UDP.
-    // The actual sending logic is handled in the main loop.
   
   Serial.println("Summary sent:");
   Serial.println(summaryBuffer);
@@ -351,9 +334,8 @@ void setup() {
   Serial.print("IP Address: ");
   Serial.println(WiFi.localIP());
   
-  Udp.begin(localPort);
-  Serial.print("Listening for commands on UDP port: ");
-  Serial.println(localPort);
+  server.begin();
+  Serial.println("TCP server started.");
   
   Serial.println("\nWaiting for commands...");
   Serial.println("Send: 'TRIGGER' to connect circuit for 100ms and capture data");
@@ -362,162 +344,79 @@ void setup() {
 }
 
 void loop() {
-  // CRITICAL: Handle high-frequency tasks first
-  if(isCapturing) {
+  // Handle high-frequency tasks
+  if (isCapturing) {
     captureVoltageReading();
   }
   checkRelay6Timeout();
 
-  // Check for incoming UDP command from PC
-  int packetSize = Udp.parsePacket();
-  if (packetSize) {
-    IPAddress remoteIp = Udp.remoteIP();
-    unsigned int remotePort = Udp.remotePort();
-    
-    int len = Udp.read(packetBuffer, packetSize > 254 ? 254 : packetSize);
-    packetBuffer[len] = 0;
-    
-    Serial.printf("\n[UDP] Received command from %s:%d - '%s'\n", remoteIp.toString().c_str(), remotePort, packetBuffer);
-    
-    Serial.print("Packet Contents: ");
-    Serial.println(packetBuffer);
-    
-    // Check for system control commands
-    if (strcmp(packetBuffer, "TRIGGER") == 0) {
-      triggerRelay6();
-      
-      // Send confirmation back to PC
-      Udp.beginPacket(remoteIp, remotePort);
-      Udp.print("TRIGGER_CONFIRMED");
-      Udp.endPacket();
-      
-    } else if (strcmp(packetBuffer, "STATUS") == 0) {
-      Serial.print("Relay 6 Status: ");
-      Serial.println(relay6Active ? "ACTIVE (will auto-off)" : "INACTIVE");
-      
-      // Send status back to client
-      char statusBuffer[150];
-      snprintf(statusBuffer, sizeof(statusBuffer), 
-               "STATUS|Relay6:%s|Path_L:%d|Path_R:%d|LastCapture:%d", 
-               relay6Active ? "ACTIVE" : "INACTIVE",
-               instantaneousInductancePath,
-               instantaneousResistancePath,
-               sampleCount);
-
-      Udp.beginPacket(remoteIp, remotePort);
-      Udp.print(statusBuffer);
-      Udp.endPacket();
-      
+  // Check for new client connections
+  if (server.hasClient()) {
+    // If a client is already connected, disconnect it first
+    if (client && client.connected()) {
+      client.stop();
+      Serial.println("Existing client disconnected.");
     }
-    // Parse string "Current,Pf" for power factor mode
-    else if (sscanf(packetBuffer, "%f\n%f", &targetCurrent, &targetPf) == 2) {
-      // ... (rest of the code remains the same)
-      
-      // Validate inputs
-      if(targetCurrent <= 0 || targetPf < 0 || targetPf > 1) {
-        Serial.println("ERROR: Invalid parameters!");
-        Serial.println("Current must be > 0, Power Factor must be 0-1");
-        
-        // Send error response back to PC
-        Udp.beginPacket(remoteIp, remotePort);
-        Udp.print("ERROR: Invalid parameters");
-        Udp.endPacket();
-        
-      } else {
-        // Get measured voltage
-        float VRms = getVRms();
-        
-        // Calculate target impedance, resistance, and inductance
-        float targetZ = VRms / targetCurrent;
-        float targetR = targetPf * targetZ;
-        float targetXL = sqrt(targetZ * targetZ - targetR * targetR);
-        float targetL = (targetXL / OMEGA) * 1000.0; // Convert to mH
+    client = server.available();
+    if (client) {
+      Serial.println("New Python client connected!");
+    }
+  }
 
-        Serial.printf("Target Z: %.2f Ω, R: %.2f Ω, L: %.2f mH\n", targetZ, targetR, targetL);
+  // If a client is connected, check for incoming commands
+  if (client && client.connected()) {
+    if (client.available()) {
+      String command = client.readStringUntil('\n');
+      command.trim();
+      Serial.print("Received command from Python: ");
+      Serial.println(command);
 
-        // 1. Select and apply the best path for THIS device
-        selectBestPath(targetL, targetR);
-        Serial.println("Best path applied on this device (abcd.ino).");
-
-        // 2. Forward the original command to the controller ESP32 via TCP
-        Serial.printf("Forwarding command to controller at %s...\n", controllerIP);
-        if (tcpClient.connect(controllerIP, controllerPort)) {
-          Serial.println("Connected to controller.");
-          tcpClient.println(packetBuffer); // Send the exact "Current,Pf" string
-          tcpClient.stop();
-          Serial.println("Command sent and disconnected from controller.");
-        } else {
-          Serial.println("!!! FAILED to connect to the controller ESP32!");
+      // --- Command Parsing ---
+      if (command.equalsIgnoreCase("TRIGGER")) {
+        triggerRelay6();
+        client.println("ACK: TRIGGER command received.");
+      } 
+      else if (command.equalsIgnoreCase("STATUS")) {
+        char statusBuffer[150];
+        snprintf(statusBuffer, sizeof(statusBuffer), 
+                 "STATUS|Relay6:%s|Path_L:%d|Path_R:%d|LastCapture:%d", 
+                 relay6Active ? "ACTIVE" : "INACTIVE",
+                 instantaneousInductancePath,
+                 instantaneousResistancePath,
+                 sampleCount);
+        client.println(statusBuffer);
+      } 
+      else {
+        // Try parsing for "Current,PowerFactor"
+        if (sscanf(command.c_str(), "%f,%f", &targetCurrent, &targetPf) == 2) {
+          float VRms = getVRms();
+          float targetZ = VRms / targetCurrent;
+          float targetR = targetPf * targetZ;
+          float targetXL = sqrt(targetZ * targetZ - targetR * targetR);
+          float targetL = (targetXL / OMEGA) * 1000.0; // Convert to mH
+          
+          selectBestPath(targetL, targetR);
+          client.println("ACK: Power Factor command processed.");
+          
+          // Auto-trigger after setting path
+          delay(100);
+          triggerRelay6();
         }
-
-        // 3. Send confirmation back to the original UDP sender (the PC)
-        char confirmationMsg[] = "CONFIRMATION: Command processed locally and forwarded to controller.";
-        Udp.beginPacket(remoteIp, remotePort);
-        Udp.write((uint8_t*)confirmationMsg, strlen(confirmationMsg));
-        Udp.endPacket();
-
-        // Auto-trigger Relay 6 after configuration
-        Serial.println("Auto-triggering Relay 6...");
-        delay(100);  // Small delay to ensure relays are settled
-        // ... (rest of the code remains the same)
-      }
-    }
-    // Parse string "R:value,L:value" for direct R-L configuration
-    else {
-      float directR, directL;
-      if (sscanf(packetBuffer, "R:%f,L:%f", &directR, &directL) == 2) {
-        Serial.print("Direct R-L Configuration Received:");
-        Serial.print(" R=");
-        Serial.print(directR, 4);
-        Serial.print(" Ohms, L=");
-        Serial.print(directL * 1000.0, 4);  // Convert H to mH for display
-        Serial.println(" mH");
-        
-        // Convert inductance from H to mH for internal calculations
-        float targetL_mH = directL * 1000.0;
-        
-        // Use direct values for path selection
-        selectBestPath(targetL_mH, directR);
-        
-        // Send confirmation back to PC
-        Serial.println("CONFIRMATION: R-L Configuration Applied Successfully");
-        Serial.print("Selected Inductance Path: ");
-        Serial.println(instantaneousInductancePath);
-        Serial.print("Selected Resistance Path: ");
-        Serial.println(instantaneousResistancePath);
-        
-        // Calculate actual values achieved
-        float actualR = iPaths[instantaneousInductancePath].resistance + rPaths[instantaneousResistancePath].resistance;
-        float actualL_mH = iPaths[instantaneousInductancePath].inductance;
-        float actualL_H = actualL_mH / 1000.0;  // Convert back to H
-        
-        Serial.print("Actual R: ");
-        Serial.print(actualR, 4);
-        Serial.print(" Ohms, Actual L: ");
-        Serial.print(actualL_H, 4);
-        Serial.println(" H");
-        
-        // Send UDP confirmation back to sender
-                String confirmationMsg = "CONFIRMATION: R-L Configuration Applied Successfully\n";
-        confirmationMsg += "Inductance Path: " + String(instantaneousInductancePath) + "\n";
-        confirmationMsg += "Resistance Path: " + String(instantaneousResistancePath) + "\n";
-        confirmationMsg += "Actual R: " + String(actualR, 4) + " Ohms\n";
-        confirmationMsg += "Actual L: " + String(actualL_H, 4) + " H\n";
-        confirmationMsg += "R-L_CONFIG_COMPLETE";
-        Udp.beginPacket(remoteIp, remotePort);
-        Udp.print(confirmationMsg);
-        Udp.endPacket();
-        
-        Serial.println("Confirmation sent back to PC via UDP");
-        
-      } else {
-        Serial.println("Unknown command or failed to parse packet.");
-        Serial.println("Valid commands: TRIGGER, STATUS, Current,PowerFactor, or R:value,L:value");
-        
-        // Send error response
-        Udp.beginPacket(remoteIp, remotePort);
-        Udp.print("ERROR: Unknown command format");
-        Udp.endPacket();
+        // Try parsing for "R:value,L:value"
+        else {
+          float directR, directL;
+          if (sscanf(command.c_str(), "R:%f,L:%f", &directR, &directL) == 2) {
+            float targetL_mH = directL * 1000.0;
+            selectBestPath(targetL_mH, directR);
+            client.println("ACK: R-L command processed.");
+            
+            // Auto-trigger after setting path
+            delay(100);
+            triggerRelay6();
+          } else {
+            client.println("ERROR: Unknown command format.");
+          }
+        }
       }
     }
   }
