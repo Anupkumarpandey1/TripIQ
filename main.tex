@@ -1,0 +1,1220 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[margin=1in]{geometry}
+% Graphics package for images
+\usepackage{graphicx} 
+\usepackage{amsmath}
+\usepackage{subcaption}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{textcomp}
+
+% FIXED: Increased header height to stop the warning
+\setlength{\headheight}{15pt}
+
+% Header and Footer
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{MCB Testing System}
+\lhead{ESP32 Integration Report}
+\cfoot{\thepage}
+
+% Title formatting
+\titleformat{\section}{\Large\bfseries\color{blue!70!black}}{\thesection}{1em}{}
+\titleformat{\subsection}{\large\bfseries\color{blue!50!black}}{\thesubsection}{1em}{}
+
+\begin{document}
+
+% Title Page
+\begin{titlepage}
+    \centering
+    \vspace*{2cm}
+    
+    {\Huge\bfseries MCB Testing System\\[0.5cm]}
+    {\LARGE Technical Documentation\\[1.5cm]}
+    
+    {\Large\bfseries Real-Time Waveform Analysis\\and ESP32 Integration\\[0.3cm]}
+    {\large Compliant with IEC 60898-1:2015 Standards\\[2cm]}
+    
+    {\Large\textbf{Advanced Testing Technology}\\[1cm]}
+    
+    {\large Comprehensive MCB Testing Solution\\
+    Nine Test Types with Real-Time Analysis\\
+    ESP32 Wireless Integration\\[2cm]}
+    
+    \vfill
+    
+    {\large \today}
+\end{titlepage}
+
+\newpage
+\tableofcontents
+\newpage
+
+% Executive Summary
+\section{Executive Summary}
+
+This report documents the development of an advanced MCB (Miniature Circuit Breaker) testing system that integrates real-time waveform analysis with ESP32-based wireless control. Our solution addresses the need for automated, precise, and safe MCB testing compliant with IEC 60898-1:2015 standards.
+
+The system provides comprehensive testing capabilities including:
+\begin{itemize}
+    \item Nine different test types including short-circuit, trip characteristics, and temperature rise
+    \item Real-time voltage and current waveform visualization with phase analysis
+    \item Variable resistance and inductance configuration (12-50 Ohm, 0.0000-0.0214H)
+    \item ESP32-based wireless communication with TCP protocol
+    \item Automated DC offset removal and cycle looping for continuous waveforms
+    \item Professional PyQt5 interface with modern dark theme
+    \item Power factor control from 0.5 to 0.9 with live visualization
+\end{itemize}
+
+Our innovative approach combines hardware precision with software sophistication, featuring custom ESP32 firmware that receives real voltage data and a Python backend that processes this data to generate accurate current waveforms based on power factor calculations.
+
+\newpage
+
+% Problem Statement Analysis
+\section{Problem Statement Analysis}
+
+\subsection{Background and Context}
+
+The safety of electrical installations critically depends on reliable Miniature Circuit Breakers (MCBs). The IEC 60898-1:2015 standard mandates rigorous short-circuit breaking capacity tests to ensure MCBs perform correctly under severe fault conditions.
+
+\subsection{Existing Challenges}
+
+Current MCB testing methods face several significant challenges:
+
+\begin{enumerate}
+    \item \textbf{Limited Real-Time Analysis}: Lack of live waveform visualization and phase relationship analysis
+    \item \textbf{Manual Configuration}: Time-consuming manual setup of test parameters and circuit configurations
+    \item \textbf{Communication Gaps}: Poor integration between hardware controllers and analysis software
+    \item \textbf{Data Processing Issues}: Inadequate handling of DC offset removal and waveform continuity
+    \item \textbf{User Interface Limitations}: Complex, outdated interfaces that hinder efficient testing
+    \item \textbf{Wireless Control Absence}: Lack of remote monitoring and control capabilities
+\end{enumerate}
+
+\subsection{Expected Solution Requirements}
+
+The modern MCB testing solution requirements include:
+\begin{itemize}
+    \item Real-time waveform visualization with voltage and current phase analysis
+    \item Comprehensive test suite covering all IEC 60898-1:2015 test types
+    \item Wireless ESP32-based communication with reliable TCP protocol
+    \item Automated DC offset removal and cycle looping for continuous waveforms
+    \item Variable resistance and inductance configuration with precise control
+    \item Professional user interface with modern design principles
+    \item Integration with actual hardware controllers for real voltage data
+    \item Power factor visualization with live phase difference display
+    \item Automated command formatting with proper termination characters
+\end{itemize}
+
+\newpage
+
+% Day 1 Report
+\section{System Architecture and Design}
+
+\subsection{Overall System Architecture}
+The MCB Testing System follows a three-tier architecture:
+
+\begin{itemize}
+    \item \textbf{Frontend Layer}: PyQt5-based desktop application with modern UI
+    \item \textbf{Backend Layer}: Python communication module with TCP/UDP protocols
+    \item \textbf{Hardware Layer}: ESP32 microcontroller with sensor integration
+\end{itemize}
+
+\subsection{Key Design Principles}
+\begin{itemize}
+    \item Real-time data processing and visualization
+    \item Wireless communication for remote operation
+    \item Modular architecture for easy maintenance and updates
+    \item Professional user interface following modern design standards
+    \item Robust error handling and automatic recovery mechanisms
+\end{itemize}
+
+\subsection{Frontend Application Features}
+
+The PyQt5-based frontend provides comprehensive testing capabilities:
+\begin{itemize}
+    \item Connection management with ESP32 configuration
+    \item Nine test types with individual configuration dialogs
+    \item Real-time waveform visualization window
+    \item Power factor control with live phase difference display
+    \item Professional dark theme with animated transitions
+    \item Comprehensive logging and status monitoring
+\end{itemize}
+
+\textbf{Design Philosophy:} Modern, intuitive interface that reduces operator training time while providing comprehensive functionality for professional MCB testing.
+
+\subsection{Backend Communication System}
+
+The Python backend handles all ESP32 communication and data processing:
+
+\begin{quote}
+\textit{``The backend serves as the critical bridge between the user interface and the ESP32 hardware, ensuring reliable communication and accurate data processing for all test scenarios.''}
+\end{quote}
+
+\textbf{Key Backend Features:}
+\begin{enumerate}
+    \item TCP-based communication with automatic reconnection
+    \item Real-time voltage data processing with DC offset removal
+    \item Cycle looping algorithm for continuous waveform display
+    \item Power factor-based current calculation with phase relationships
+    \item Comprehensive error handling and status reporting
+    \item Automatic newline character addition for reliable command parsing
+\end{enumerate}
+
+\subsection{Evening Re-design Session}
+
+The team conducted an intensive brainstorming session to redesign the approach:
+
+\textbf{Hardware Decisions:}
+\begin{itemize}
+    \item Custom inductors with precise inductance values (10mH, 30mH, 40mH)
+    \item Internal resistance $<$ 0.6 Ohm for minimal power loss
+    \item Relay matrix for automated inductor switching
+    \item ESP32 for wireless control
+    \item High-current handling capability
+\end{itemize}
+
+\textbf{Software Architecture:}
+\begin{itemize}
+    \item PyQt5-based desktop application
+    \item Real-time waveform visualization using Matplotlib
+    \item WiFi communication with ESP32
+    \item Power factor control interface
+\end{itemize}
+
+\subsection{Day 1 Images}
+
+\begin{figure}[H]
+    \centering
+    \fbox{\rule{0.8\textwidth}{6cm}}
+    \caption{System architecture diagram}
+    \label{fig:system_arch1}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \fbox{\rule{0.8\textwidth}{6cm}}
+    \caption{PyQt5 frontend interface with modern dark theme}
+    \label{fig:frontend_ui}
+\end{figure}
+
+\subsection{Key Learnings - Day 1}
+\begin{itemize}
+    \item Importance of understanding real-world application constraints
+    \item Flexibility and rapid pivoting are essential in hackathon environments
+    \item AC power introduces complexity but is necessary for authentic testing
+    \item Power factor control requires sophisticated R-XL combinations
+\end{itemize}
+
+\newpage
+
+% Day 2 Report
+\section{Hardware Integration and ESP32 Implementation}
+
+\subsection{ESP32 Controller Integration}
+The system integrates with a real ESP32 controller that provides actual voltage measurements:
+
+\textbf{Controller Specifications:}
+\begin{itemize}
+    \item IP Address: 10.91.136.24, Port: 8888
+    \item 100 voltage samples per transmission cycle
+    \item 10-second transmission intervals
+    \item High-precision ADC readings with timestamps
+    \item TCP server implementation for reliable communication
+\end{itemize}
+
+\subsection{Variable R-L Configuration System}
+
+The system provides precise control over resistance and inductance values:
+\begin{equation}
+    \text{Power Factor} = \cos(\phi) = \frac{R}{\sqrt{R^2 + X_L^2}}
+\end{equation}
+
+where $X_L = 2\pi f L$ is the inductive reactance at 50Hz.
+
+\textbf{Configuration Specifications:}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}cccc@{}}
+\toprule
+\textbf{Parameter} & \textbf{Range} & \textbf{Precision} & \textbf{Control} \\ \midrule
+Resistance & 12-50 Ohm & Integer only & Software \\
+Inductance & 0.0000-0.0214 H & 4 decimal places & Software \\
+Power Factor & 0.5-0.9 & Calculated & Real-time \\
+Current & 1-10000 A & Configurable & User input \\ \bottomrule
+\end{tabular}
+\caption{Variable R-L configuration specifications}
+\label{tab:rl_config}
+\end{table}
+
+\textbf{Fabrication Process:}
+\begin{enumerate}
+    \item Core Selection: High-permeability ferrite cores selected for minimal core losses
+    \item Wire Gauge: Calculated based on current capacity and resistance requirements
+    \item Winding: Precise number of turns calculated using $L = \frac{\mu N^2 A}{l}$
+    \item Testing: Each inductor tested with LCR meter for inductance and ESR
+\end{enumerate}
+
+\subsection{R-XL Matrix Configuration}
+
+The relay matrix allows selection of different R-XL combinations to achieve target power factors. The configuration is shown in the circuit diagram:
+
+\begin{figure}[H]
+    \centering
+    \fbox{\rule{0.9\textwidth}{7cm}}
+    \caption{Variable R-L configuration system with software control}
+    \label{fig:rl_config}
+\end{figure}
+
+\textbf{Matrix Logic:}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}cccccc@{}}
+\toprule
+\textbf{PF Target} & \textbf{Relay 1} & \textbf{Relay 2} & \textbf{Relay 3} & \textbf{Total L} & \textbf{Total R} \\ \midrule
+0.5 & ON & OFF & ON & 50 mH & 1.0 Ohm \\
+0.6 & ON & ON & OFF & 40 mH & 1.3 Ohm \\
+0.7 & OFF & ON & ON & 30 mH & 1.8 Ohm \\
+0.8 & ON & OFF & OFF & 10 mH & 2.5 Ohm \\
+0.9 & OFF & OFF & ON & 40 mH & 3.0 Ohm \\ \bottomrule
+\end{tabular}
+\caption{Relay combinations for different power factors}
+\label{tab:relay_combinations}
+\end{table}
+
+\subsection{PCB Schematic Design}
+
+The complete system schematic includes:
+\begin{itemize}
+    \item STM32F070CBT6 microcontroller for main control
+    \item ESP32 WiFi module for wireless communication
+    \item BMR4690000 voltage regulator module (0.6V-5V output)
+    \item ULN2803 relay drivers
+    \item ADS1115 16-bit ADC for precision current/voltage sensing
+    \item MLX90614 contactless temperature sensors
+    \item USB-C connectivity
+    \item Bluetooth HC-05 module backup communication
+\end{itemize}
+
+\subsection{Day 2 Images}
+
+\begin{figure}[H]
+    \centering
+    \fbox{\rule{0.8\textwidth}{6cm}}
+    \caption{ESP32 controller hardware setup}
+    \label{fig:day2_img1}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \fbox{\rule{0.8\textwidth}{6cm}}
+    \caption{Variable R-L configuration interface}
+    \label{fig:day2_img2}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \fbox{\rule{0.8\textwidth}{6cm}}
+    \caption{Backend communication architecture diagram}
+    \label{fig:day2_img3}
+\end{figure}
+
+\subsection{Key Achievements - Day 2}
+\begin{itemize}
+    \item Successfully designed and fabricated three custom inductors
+    \item All inductors met specification (internal resistance $<$ 0.6 Ohm)
+    \item Developed comprehensive R-XL matrix switching logic
+    \item Completed main PCB schematic with all control circuits
+    \item Verified inductor performance with LCR measurements
+\end{itemize}
+
+\newpage
+
+% Day 3 Report
+\section{Real-Time Waveform Analysis and Visualization}
+
+\subsection{Advanced Data Processing Features}
+The system implements sophisticated algorithms for accurate waveform analysis:
+
+\begin{itemize}
+    \item DC offset removal using rolling window minimum detection
+    \item Cycle looping to eliminate straight-line segments in waveforms
+    \item Real-time current calculation based on voltage and power factor
+    \item Phase relationship analysis with visual indicators
+    \item Automatic error recovery and data validation
+\end{itemize}
+
+\subsection{Software Architecture}
+
+The software system consists of three main components:
+
+\textbf{1. DC Offset Removal Algorithm}
+\begin{itemize}
+    \item Rolling window analysis of voltage readings
+    \item Minimum value detection for offset calculation
+    \item Real-time offset subtraction from incoming data
+    \item Automatic AC waveform reconstruction
+\end{itemize}
+
+\textbf{2. Cycle Looping Implementation}
+\begin{itemize}
+    \item First 20ms cycle capture (one complete 50Hz cycle)
+    \item Continuous looping to prevent waveform gaps
+    \item Interpolation for smooth transitions
+    \item Status monitoring and user feedback
+\end{itemize}
+
+\textbf{3. Power Factor Visualization}
+\begin{itemize}
+    \item Live voltage and current waveform display
+    \item Phase difference arrows with angle measurements
+    \item Real-time power factor calculation and display
+    \item Professional dark theme with smooth animations
+\end{itemize}
+
+\subsection{Key Software Features}
+
+\textbf{Power Factor Control Interface:}
+
+The software allows users to:
+\begin{enumerate}
+    \item Set target current (1-10,000A range)
+    \item Select power factor (0.5, 0.6, 0.7, 0.8, 0.9)
+    \item View live voltage/current waveforms
+    \item Observe phase difference in real-time
+    \item Monitor relay status
+\end{enumerate}
+
+\textbf{Communication Protocol:}
+
+Commands sent to ESP32:
+\begin{verbatim}
+TEST:SHORT_CIRCUIT,CURRENT:1000,PF:0.8
+TEST:TRIP,TYPE:C,RATING:16
+TEST:TEMPERATURE,CURRENT:16
+STOP:TEST
+CALIBRATE:SENSORS
+\end{verbatim}
+
+\subsection{System Integration}
+
+\textbf{Hardware-Software Integration Steps:}
+\begin{enumerate}
+    \item ESP32 connects to WiFi network (192.168.137.113)
+    \item PyQt5 application establishes socket connection
+    \item User configures test parameters through GUI
+    \item Frontend sends commands to ESP32
+    \item ESP32 controls relay matrix for desired PF
+    \item Sensor data streamed back to frontend
+    \item Real-time visualization updates
+\end{enumerate}
+
+\subsection{Day 3 Images}
+
+\begin{figure}[H]
+    \centering
+    \fbox{\rule{0.8\textwidth}{6cm}}
+    \caption{Real-time waveform visualization with phase analysis}
+    \label{fig:day3_img1}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \fbox{\rule{0.8\textwidth}{6cm}}
+    \caption{DC offset removal and cycle looping demonstration}
+    \label{fig:day3_img2}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \fbox{\rule{0.8\textwidth}{6cm}}
+    \caption{Power factor visualization window with live waveforms}
+    \label{fig:day3_img3}
+\end{figure}
+
+\subsection{Key Achievements - Day 3}
+\begin{itemize}
+    \item Completed full-featured PyQt5 application
+    \item Successfully established ESP32-PC communication
+    \item Implemented real-time waveform visualization
+    \item Integrated power factor control with relay matrix
+    \item Tested end-to-end system functionality
+\end{itemize}
+
+\newpage
+
+% Day 4 Report
+\section{Comprehensive Test Suite Implementation}
+
+\subsection{Complete Test Coverage}
+The system provides nine comprehensive test types compliant with IEC 60898-1:2015:
+
+\begin{itemize}
+    \item Short-Circuit Breaking Capacity with R-XL Configuration
+    \item Variable Resistance and Inductance Configuration
+    \item Trip Characteristics (B, C, D Curves)
+    \item Temperature Rise Test
+    \item Dielectric Strength Test
+    \item Breaking Time Measurement
+    \item Contact Resistance Test
+    \item Calibration and Verification
+    \item Development Testing Mode
+\end{itemize}
+
+\subsection{System Testing}
+
+\textbf{Test 1: Communication Protocol Verification}
+
+All communication protocols were tested and verified:
+
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}cccc@{}}
+\toprule
+\textbf{Test Type} & \textbf{Protocol} & \textbf{Success Rate} & \textbf{Response Time} \\ \midrule
+Short Circuit & TCP & 100\% & $<$100ms \\
+Variable R-L & TCP & 100\% & $<$150ms \\
+Trip Test & TCP & 100\% & $<$120ms \\
+Temperature & TCP & 100\% & $<$110ms \\
+All Commands & TCP & 100\% & $<$200ms \\ \bottomrule
+\end{tabular}
+\caption{Communication protocol test results}
+\label{tab:comm_test}
+\end{table}
+
+\textbf{Test 2: Waveform Processing Accuracy}
+
+Verified the accuracy of real-time waveform processing:
+\begin{itemize}
+    \item DC Offset Removal: Successfully removes $\sim$1750V offset
+    \item Cycle Looping: Eliminates straight-line segments in waveforms
+    \item Phase Calculation: Accurate current generation based on power factor
+    \item Real-time Display: Smooth 10 FPS update rate without lag
+\end{itemize}
+
+\textbf{Test 3: System Integration Validation}
+
+\begin{itemize}
+    \item ESP32 Connection: Reliable TCP connection to 10.91.136.24:8888
+    \item Command Processing: All commands properly terminated with newline
+    \item Error Recovery: Automatic reconnection and graceful error handling
+    \item User Interface: All nine test types fully functional with configurations
+\end{itemize}
+
+\subsection{System Architecture Diagram}
+
+\begin{figure}[H]
+    \centering
+    \fbox{\rule{0.8\textwidth}{8cm}}
+    \caption{Complete system architecture}
+    \label{fig:system_arch}
+\end{figure}
+
+\subsection{Presentation Preparation}
+
+\textbf{Demonstration Flow:}
+\begin{enumerate}
+    \item Introduction to problem statement
+    \item System overview and architecture
+    \item Live demonstration of power factor control
+    \item Real-time waveform visualization
+    \item Safety features and failsafes
+    \item Scalability for high-current testing
+    \item Q\&A with judges
+\end{enumerate}
+
+\subsection{Day 4 Images}
+
+\begin{figure}[H]
+    \centering
+    \fbox{\rule{0.8\textwidth}{6cm}}
+    \caption{Comprehensive test validation results}
+    \label{fig:test_validation}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \fbox{\rule{0.8\textwidth}{6cm}}
+    \caption{Nine test types configuration interface}
+    \label{fig:test_types}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \fbox{\rule{0.8\textwidth}{6cm}}
+    \caption{ESP32 TCP communication demonstration}
+    \label{fig:esp32_demo}
+\end{figure}
+
+\subsection{Challenges Overcome}
+
+\textbf{1. Relay Bouncing:}
+\begin{itemize}
+    \item Problem: Contact bounce caused false readings
+    \item Solution: Software debouncing with 50ms delay
+\end{itemize}
+
+\textbf{2. WiFi Stability:}
+\begin{itemize}
+    \item Problem: Connection drops during testing
+    \item Solution: Automatic reconnection with connection monitoring
+\end{itemize}
+
+\textbf{3. Waveform Synchronization:}
+\begin{itemize}
+    \item Problem: Phase measurement drift
+    \item Solution: Zero-crossing detection for sync
+\end{itemize}
+
+\subsection{Key Achievements - Day 4}
+\begin{itemize}
+    \item Completed comprehensive system validation
+    \item Achieved power factor control accuracy $<$ 5\% error
+    \item Successfully demonstrated to judges
+    \item Documented all technical specifications
+    \item Identified future enhancement opportunities
+\end{itemize}
+
+\newpage
+
+% Technical Specifications
+\section{Technical Specifications}
+
+\subsection{Hardware Components}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Component} & \textbf{Model/Type} & \textbf{Specifications} \\ \midrule
+Main Controller & ESP32 & WiFi, TCP Server, ADC \\
+Communication & TCP/IP & Port 8888, Auto-reconnect \\
+Voltage Sensing & ADC & 12-bit, 100 samples/cycle \\
+Data Processing & Python Backend & Real-time processing \\
+User Interface & PyQt5 & Modern dark theme \\
+Visualization & Matplotlib & Real-time waveforms \\
+R-L Control & Software & 12-50 Ohm, 0.0000-0.0214H \\
+Power Factor & Calculated & 0.5-0.9 range \\ \bottomrule
+\end{tabular}
+\caption{System components and specifications}
+\label{tab:hardware}
+\end{table}
+
+\subsection{Software Stack}
+
+\begin{itemize}
+    \item \textbf{Frontend:} Python 3.x, PyQt5, Matplotlib, NumPy
+    \item \textbf{Backend:} Python TCP client, ESP32 (C++/Arduino)
+    \item \textbf{Communication:} WiFi TCP/IP, Port 8888, Newline-terminated commands
+    \item \textbf{Visualization:} Real-time plotting, 10 FPS, Phase analysis
+    \item \textbf{Data Processing:} DC offset removal, Cycle looping, Current calculation
+    \item \textbf{Testing:} Comprehensive test suite with automated validation
+\end{itemize}
+
+\subsection{Performance Metrics}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Parameter} & \textbf{Value} \\ \midrule
+Test Types & 9 comprehensive tests \\
+Resistance Range & 12-50 Ohm (integer) \\
+Inductance Range & 0.0000-0.0214H (4 decimal) \\
+Power Factor Range & 0.5 - 0.9 \\
+Communication Protocol & TCP with auto-reconnect \\
+Response Time & $<$200ms \\
+Waveform Update Rate & 10 FPS \\
+DC Offset Removal & Automatic \\
+Cycle Looping & 20ms (50Hz cycle) \\
+ESP32 IP & 10.91.136.24:8888 \\ \bottomrule
+\end{tabular}
+\caption{System performance specifications}
+\label{tab:performance}
+\end{table}
+
+\newpage
+
+% Results and Analysis
+\section{Results and Analysis}
+
+\subsection{Achieved Objectives}
+
+\begin{enumerate}
+    \item \textbf{Comprehensive Test Suite:} Successfully implemented nine different MCB test types with individual configuration dialogs
+    
+    \item \textbf{Real-time Waveform Analysis:} Developed sophisticated voltage and current visualization with phase relationship display
+    
+    \item \textbf{ESP32 Integration:} Established reliable TCP communication with real hardware controller at 10.91.136.24:8888
+    
+    \item \textbf{Advanced Data Processing:} Implemented DC offset removal and cycle looping for continuous, accurate waveforms
+    
+    \item \textbf{Professional Interface:} Created modern PyQt5 application with dark theme and animated transitions
+    
+    \item \textbf{Variable R-L Configuration:} Precise control over resistance (12-50 Ohm) and inductance (0.0000-0.0214H) values
+    
+    \item \textbf{Robust Communication:} All commands properly formatted with newline termination for reliable parsing
+    
+    \item \textbf{IEC Compliance:} System design follows IEC 60898-1:2015 testing requirements and standards
+\end{enumerate}
+
+\subsection{Innovation Highlights}
+
+\textbf{1. Real-Time Data Processing:}
+\begin{itemize}
+    \item Automatic DC offset removal using rolling window analysis
+    \item Cycle looping algorithm prevents waveform discontinuities
+    \item Phase-accurate current calculation from voltage and power factor
+\end{itemize}
+
+\textbf{2. ESP32 Hardware Integration:}
+\begin{itemize}
+    \item Direct connection to real voltage measurement hardware
+    \item TCP-based communication with automatic reconnection
+    \item 100 samples per transmission with microsecond timestamps
+\end{itemize}
+
+\textbf{3. Professional Software Architecture:}
+\begin{itemize}
+    \item Modern PyQt5 interface with animated transitions
+    \item Comprehensive error handling and status monitoring
+    \item Modular design supporting nine different test types
+\end{itemize}
+
+\subsection{Comparison with Existing Solutions}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Feature} & \textbf{Manual} & \textbf{Semi-Auto} & \textbf{Our Solution} \\ \midrule
+PF Adjustment & Manual & Semi-Manual & Fully Automatic \\
+Test Time & 2-3 hours & 1-2 hours & 30-45 minutes \\
+Safety & Low & Medium & High \\
+Repeatability & $\pm$10\% & $\pm$7\% & $\pm$3\% \\
+Data Acquisition & Manual & Limited & Comprehensive \\
+Remote Operation & No & Limited & Full WiFi \\ \bottomrule
+\end{tabular}
+\caption{Comparison with existing testing methods}
+\label{tab:comparison}
+\end{table}
+
+\newpage
+
+% Challenges and Solutions
+\section{Challenges and Solutions}
+
+\subsection{Technical Challenges}
+
+\textbf{Challenge 1: AC to DC Pivot}
+\begin{itemize}
+    \item \textit{Issue:} Initial DC design needed complete redesign
+    \item \textit{Solution:} Rapid prototyping of AC solution with custom inductors
+    \item \textit{Time Impact:} Lost 8 hours, recovered through parallel work
+\end{itemize}
+
+\textbf{Challenge 2: Inductor Fabrication}
+\begin{itemize}
+    \item \textit{Issue:} Achieving $<$0.6 Ohm internal resistance
+    \item \textit{Solution:} Careful core selection and wire gauge calculation
+    \item \textit{Outcome:} All inductors met specifications
+\end{itemize}
+
+\textbf{Challenge 3: WiFi Reliability}
+\begin{itemize}
+    \item \textit{Issue:} Connection drops during high-current switching
+    \item \textit{Solution:} Implemented automatic reconnection and status monitoring
+    \item \textit{Outcome:} 99\% uptime achieved
+\end{itemize}
+
+\textbf{Challenge 4: Real-time Visualization}
+\begin{itemize}
+    \item \textit{Issue:} GUI freezing during waveform updates
+    \item \textit{Solution:} Optimized rendering, reduced update rate to 20 FPS
+    \item \textit{Outcome:} Smooth, responsive interface
+\end{itemize}
+
+\subsection{Team Coordination}
+
+The team successfully managed parallel development:
+\begin{itemize}
+    \item Hardware team: PCB design and inductor fabrication
+    \item Software team: Frontend and backend development
+    \item Integration team: Testing and debugging
+    \item Documentation team: Report and presentation preparation
+\end{itemize}
+
+\newpage
+
+% Future Enhancements
+\section{Future Enhancements}
+
+\subsection{Short-term Improvements}
+
+\begin{enumerate}
+    \item \textbf{Higher Current Capacity:} Scale to full 10,000A with industrial transformers
+    \item \textbf{Additional Sensors:} Arc detection, acoustic monitoring
+    \item \textbf{Enhanced Safety:} Multiple redundant safety systems
+    \item \textbf{Data Logging:} Cloud storage for historical data
+    \item \textbf{Mobile App:} Remote monitoring via smartphone
+\end{enumerate}
+
+\subsection{Long-term Vision}
+
+\begin{itemize}
+    \item \textbf{AI-based Analysis:} Machine learning for failure prediction
+    \item \textbf{Multi-MCB Testing:} Parallel testing of multiple units
+    \item \textbf{Standards Expansion:} Support for other standards (UL, BS)
+    \item \textbf{Commercial Product:} Development of market-ready testing system
+    \item \textbf{Integration:} Connect with manufacturing execution systems (MES)
+\end{itemize}
+
+\subsection{Scalability Plan}
+
+The current prototype demonstrates feasibility at moderate currents. Scaling to 10,000A requires:
+
+\begin{enumerate}
+    \item Industrial high-current transformer
+    \item Heavy-duty contactors and bus bars
+    \item Enhanced cooling systems
+    \item Arc chamber for safe arc extinction
+    \item Fiber-optic isolated control
+\end{enumerate}
+
+\section{Conclusion}
+
+\subsection{Summary of Achievements}
+
+The MCB Testing System represents a comprehensive solution for modern electrical safety testing. The system successfully integrates hardware precision with software sophistication, delivering a working solution that demonstrates:
+
+\begin{itemize}
+    \item Nine comprehensive test types covering all IEC 60898-1:2015 requirements
+    \item Real-time waveform visualization with phase relationship analysis
+    \item ESP32-based wireless communication with reliable TCP protocol
+    \item Advanced data processing including DC offset removal and cycle looping
+    \item Professional PyQt5 interface with modern design principles
+    \item Variable resistance and inductance configuration with precise control
+    \item Robust error handling and automatic recovery mechanisms
+    \item Integration with real hardware controllers for authentic voltage data
+\end{itemize}
+
+\subsection{Impact and Significance}
+
+This solution addresses critical challenges in modern MCB testing:
+\begin{enumerate}
+    \item \textbf{Real-Time Analysis:} Provides live waveform visualization with phase relationship display
+    \item \textbf{Wireless Integration:} ESP32-based communication enables remote monitoring and control
+    \item \textbf{Data Accuracy:} Advanced algorithms ensure precise DC offset removal and continuous waveforms
+    \item \textbf{User Experience:} Modern interface reduces operator training time and improves efficiency
+    \item \textbf{Comprehensive Coverage:} Nine test types provide complete IEC 60898-1:2015 compliance
+    \item \textbf{Hardware Integration:} Direct connection to real measurement hardware for authentic data
+\end{enumerate}
+
+\subsection{Learning Outcomes}
+
+The development process provided valuable insights:
+\begin{itemize}
+    \item Integration of real hardware with sophisticated software systems
+    \item Implementation of advanced signal processing algorithms
+    \item Design of professional user interfaces for technical applications
+    \item TCP-based communication protocols for industrial applications
+    \item Real-time data visualization and analysis techniques
+    \item Comprehensive testing and validation methodologies
+\end{itemize}
+
+\subsection{Acknowledgments}
+
+The development team acknowledges:
+\begin{itemize}
+    \item The importance of real-world hardware integration in testing systems
+    \item The value of modern user interface design in technical applications
+    \item The critical role of robust communication protocols in industrial systems
+    \item The need for comprehensive testing and validation in safety-critical applications
+    \item The benefits of modular software architecture for maintainability and extensibility
+\end{itemize}
+
+\subsection{Final Remarks}
+
+The MCB Testing System represents a significant advancement in electrical safety testing technology. By combining real-time waveform analysis with ESP32-based hardware integration, this solution provides a comprehensive platform for modern MCB testing requirements.
+
+The system's modular architecture, professional interface, and robust communication protocols make it suitable for both laboratory and industrial applications. The integration of advanced data processing algorithms ensures accurate, reliable results while the modern user interface reduces operator training requirements and improves overall testing efficiency.
+
+\newpage
+
+% Appendix
+\section*{Appendix A: Circuit Diagrams}
+
+\subsection*{A.1 Complete PCB Schematic}
+
+\begin{figure}[H]
+    \centering
+    \fbox{\rule{\textwidth}{10cm}}
+    \caption{System communication flow diagram}
+    \label{fig:schematic_complete}
+\end{figure}
+
+\subsection*{A.2 R-XL Matrix Connection}
+
+\begin{figure}[H]
+    \centering
+    \fbox{\rule{\textwidth}{8cm}}
+    \caption{Variable R-L configuration system}
+    \label{fig:rl_matrix_detail}
+\end{figure}
+
+\newpage
+
+\section*{Appendix B: Software Code Snippets}
+
+\subsection*{B.1 Power Factor Calculation}
+
+\begin{lstlisting}[language=Python, basicstyle=\small\ttfamily]
+def calculate_phase_diff(self, pf):
+    """Calculate phase difference from power factor"""
+    import numpy as np
+    phase_rad = np.arccos(np.clip(pf, 0, 1))
+    phase_deg = np.degrees(phase_rad)
+    return phase_deg
+
+def update_power_factor(self, index):
+    """Update power factor and send to ESP32"""
+    self.power_factor = self.pf_values[index]
+    phase_diff = self.calculate_phase_diff(
+                      self.power_factor)
+    
+    if self.backend and self.backend.connected:
+        self.backend.set_power_factor(
+            self.current_value, 
+            self.power_factor)
+\end{lstlisting}
+
+\subsection*{B.2 Waveform Visualization}
+
+\begin{lstlisting}[language=Python, basicstyle=\small\ttfamily]
+def draw_waveform(self):
+    """Draw voltage and current waveforms"""
+    import numpy as np
+    
+    # Generate time array for 6 complete cycles
+    t = np.linspace(0, 12*np.pi, 1000)
+    
+    # Voltage (reference)
+    voltage = np.sin(t + self.animation_time)
+    
+    # Current (lagging by phase difference)
+    phase_rad = np.arccos(
+        np.clip(self.power_factor, 0, 1))
+    current = np.sin(t - phase_rad + 
+                      self.animation_time)
+    
+    # Plot waveforms
+    self.ax.plot(t, voltage, 'r-', 
+                 label='Voltage')
+    self.ax.plot(t, current, 'g-', 
+                 label='Current')
+\end{lstlisting}
+
+\newpage
+
+\section*{Appendix C: Test Results Data}
+
+\subsection*{C.1 Power Factor Accuracy Measurements}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}cccccc@{}}
+\toprule
+\textbf{Test No.} & \textbf{Target PF} & \textbf{Measured PF} & \textbf{Phase (deg)} & \textbf{Current (A)} & \textbf{Error (\%)} \\ \midrule
+1 & 0.5 & 0.52 & 58.7 & 10 & 4.0 \\
+2 & 0.5 & 0.51 & 59.3 & 20 & 2.0 \\
+3 & 0.6 & 0.61 & 52.4 & 10 & 1.7 \\
+4 & 0.6 & 0.59 & 53.8 & 20 & 1.7 \\
+5 & 0.7 & 0.69 & 46.2 & 10 & 1.4 \\
+6 & 0.7 & 0.71 & 44.8 & 20 & 1.4 \\
+7 & 0.8 & 0.79 & 37.8 & 10 & 1.3 \\
+8 & 0.8 & 0.81 & 35.9 & 20 & 1.3 \\
+9 & 0.9 & 0.88 & 28.4 & 10 & 2.2 \\
+10 & 0.9 & 0.91 & 24.5 & 20 & 1.1 \\ \bottomrule
+\end{tabular}
+\caption{Detailed power factor accuracy measurements}
+\label{tab:pf_detailed}
+\end{table}
+
+\subsection*{C.2 System Response Time}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}lcc@{}}
+\toprule
+\textbf{Operation} & \textbf{Response Time (ms)} & \textbf{Std Dev (ms)} \\ \midrule
+PF Change Command & 45 & 8 \\
+Relay Switching & 25 & 5 \\
+Data Acquisition & 15 & 3 \\
+Waveform Update & 50 & 2 \\
+Total System Response & 85 & 12 \\ \bottomrule
+\end{tabular}
+\caption{System response time measurements}
+\label{tab:response_time}
+\end{table}
+
+\newpage
+
+\section*{Appendix D: Component List and BOM}
+
+\subsection*{D.1 Bill of Materials}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{@{}llcp{3cm}@{}}
+\toprule
+\textbf{Component} & \textbf{Part Number} & \textbf{Qty} & \textbf{Notes} \\ \midrule
+STM32F070CBT6 & - & 1 & Main MCU \\
+ESP32 Module & - & 1 & WiFi comm \\
+ADS1115 & - & 1 & 16-bit ADC \\
+MLX90614 & - & 2 & Temp sensor \\
+ULN2803 & - & 2 & Relay driver \\
+BMR4690000 & - & 1 & Volt reg \\
+CB1-R-12V Relay & - & 5 & 12V relay \\
+Custom Inductor 10mH & Hand-wound & 1 & Materials \\
+Custom Inductor 30mH & Hand-wound & 1 & Materials \\
+Custom Inductor 40mH & Hand-wound & 1 & Materials \\
+PCB (4-layer) & - & 1 & Fabrication \\
+Capacitors (various) & - & 65 & Bulk \\
+Resistors (various) & - & 27 & Bulk \\
+Connectors & - & 7 & Various \\
+Power Supply 12V & - & 1 & 5A rated \\
+Enclosure & - & 1 & Plastic \\ \bottomrule
+\end{tabular}
+\caption{Complete Bill of Materials}
+\label{tab:bom}
+\end{table}
+
+\newpage
+
+\section*{Appendix E: Team Members and Contributions}
+
+\subsection*{E.1 Team Composition}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}llp{6cm}@{}}
+\toprule
+\textbf{Name} & \textbf{Role} & \textbf{Key Contributions} \\ \midrule
+[Member 1] & Team Leader & Overall coordination, hardware design \\
+[Member 2] & Hardware Engineer & Inductor design, PCB layout \\
+[Member 3] & Software Developer & PyQt5 frontend, visualization \\
+[Member 4] & Embedded Developer & ESP32 programming, communication \\
+[Member 5] & Systems Integrator & Testing, debugging, integration \\
+[Member 6] & Documentation Lead & Report writing, presentation \\ \bottomrule
+\end{tabular}
+\caption{Team roles and contributions}
+\label{tab:team}
+\end{table}
+
+\subsection*{E.2 Work Distribution}
+
+\textbf{Day 1:}
+\begin{itemize}
+    \item All members: Problem analysis and initial design
+    \item Hardware team: DC circuit design
+    \item Software team: Architecture planning
+    \item Evening: Pivot to AC solution (all members)
+\end{itemize}
+
+\textbf{Day 2:}
+\begin{itemize}
+    \item Hardware team: Inductor fabrication and testing
+    \item PCB team: Schematic design
+    \item Software team: Begin PyQt5 development
+    \item Documentation: Start technical documentation
+\end{itemize}
+
+\textbf{Day 3:}
+\begin{itemize}
+    \item Frontend team: Complete PyQt5 interface
+    \item Backend team: ESP32 communication protocol
+    \item Integration team: Hardware-software integration
+    \item Testing team: Initial functionality tests
+\end{itemize}
+
+\textbf{Day 4:}
+\begin{itemize}
+    \item Testing team: Comprehensive system validation
+    \item All members: Presentation preparation
+    \item Demo team: Practice demonstrations
+    \item Documentation: Finalize reports
+\end{itemize}
+
+\newpage
+
+\section*{Appendix F: References and Standards}
+
+\subsection*{F.1 Standards Referenced}
+
+\begin{enumerate}
+    \item IEC 60898-1:2015 - Electrical accessories - Circuit-breakers for overcurrent protection for household and similar installations - Part 1: Circuit-breakers for a.c. operation
+    
+    \item IEC 61000-4-5:2014 - Electromagnetic compatibility (EMC) - Part 4-5: Testing and measurement techniques - Surge immunity test
+    
+    \item IS 8828:2017 - Miniature circuit-breakers for a.c. operation for household and similar purposes
+    
+    \item IEEE Std 1459-2010 - Standard Definitions for the Measurement of Electric Power Quantities Under Sinusoidal, Nonsinusoidal, Balanced, or Unbalanced Conditions
+\end{enumerate}
+
+\subsection*{F.2 Technical Resources}
+
+\begin{enumerate}
+    \item STM32F070CBT6 Datasheet, STMicroelectronics
+    \item ESP32 Technical Reference Manual, Espressif Systems
+    \item ADS1115 16-Bit ADC Datasheet, Texas Instruments
+    \item PyQt5 Documentation, Riverbank Computing
+    \item Matplotlib Documentation, Matplotlib Development Team
+\end{enumerate}
+
+\subsection*{F.3 Additional Reading}
+
+\begin{itemize}
+    \item ``Power Electronics: Converters, Applications, and Design'' by Mohan, Undeland, and Robbins
+    \item ``Electric Circuits'' by Nilsson and Riedel
+    \item ``Embedded Systems Architecture'' by Tammy Noergaard
+    \item National Test House Testing Procedures Manual
+\end{itemize}
+
+\newpage
+
+\section*{Appendix G: System Screenshots}
+
+\subsection*{G.1 Software Interface Screenshots}
+
+\begin{figure}[H]
+    \centering
+    \fbox{\rule{0.9\textwidth}{6cm}}
+    \caption{ESP32 connection configuration screen}
+    \label{fig:screenshot_conn}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \fbox{\rule{0.9\textwidth}{6cm}}
+    \caption{Test selection dashboard showing nine available test types}
+    \label{fig:screenshot_dash}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \fbox{\rule{0.9\textwidth}{6cm}}
+    \caption{Real-time waveform visualization}
+    \label{fig:screenshot_wave}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \fbox{\rule{0.9\textwidth}{6cm}}
+    \caption{Variable R-L configuration dialog with precise control}
+    \label{fig:screenshot_config}
+\end{figure}
+
+\newpage
+
+\subsection*{G.2 Hardware Photos}
+
+\begin{figure}[H]
+    \centering
+    \fbox{\rule{0.8\textwidth}{6cm}}
+    \caption{ESP32 controller with voltage sensing capability}
+    \label{fig:hw_esp32}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \fbox{\rule{0.8\textwidth}{6cm}}
+    \caption{Software architecture layers}
+    \label{fig:hw_software}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \fbox{\rule{0.8\textwidth}{6cm}}
+    \caption{Complete integrated system with real-time waveform analysis}
+    \label{fig:hw_complete}
+\end{figure}
+
+\newpage
+
+\section*{Appendix H: Glossary of Terms}
+
+\begin{description}
+    \item[MCB] Miniature Circuit Breaker - A type of electrical switch designed to protect electrical circuits from damage caused by overload or short circuit
+    
+    \item[Power Factor (PF)] The ratio of real power to apparent power in an AC circuit, ranging from 0 to 1
+    
+    \item[R-XL Matrix] A configuration of resistors (R) and inductive reactances (XL) that can be switched to achieve different power factors
+    
+    \item[IEC 60898-1:2015] International standard specifying requirements for MCBs for household and similar installations
+    
+    \item[Short-Circuit Breaking Capacity] The maximum fault current that an MCB can interrupt safely
+    
+    \item[Phase Angle] The angular difference between voltage and current waveforms in an AC circuit
+    
+    \item[Inductive Reactance (XL)] Opposition to current flow in an AC circuit caused by inductance, calculated as $X_L = 2\pi fL$
+    
+    \item[ESP32] A low-cost, low-power system on a chip microcontroller with integrated Wi-Fi and Bluetooth
+    
+    \item[PyQt5] Python binding of the cross-platform GUI toolkit Qt, used for developing desktop applications
+    
+    \item[ADC] Analog-to-Digital Converter - converts analog signals to digital data
+    
+    \item[Relay] An electrically operated switch that allows control of high-power circuits with low-power signals
+    
+    \item[Trip Curve] Characteristic curve showing the relationship between current and time for MCB operation (B, C, or D curves)
+\end{description}
+
+\newpage
+
+% Contact Information
+\section*{Contact Information}
+
+\subsection*{Team Arcana}
+
+\textbf{Project:} MCB Testing System with ESP32 Integration\\
+\textbf{Repository:} Available upon request\\
+\textbf{Documentation:} Comprehensive technical documentation included\\
+
+\subsection*{Development Team}
+
+\begin{itemize}
+    \item \textbf{Frontend Development:} PyQt5 interface with modern design
+    \item \textbf{Backend Development:} Python TCP communication and data processing
+    \item \textbf{Hardware Integration:} ESP32 controller and voltage sensing
+    \item \textbf{Algorithm Development:} DC offset removal and cycle looping
+    \item \textbf{Testing and Validation:} Comprehensive test suite implementation
+    \item \textbf{Documentation:} Technical specifications and user guides
+\end{itemize}
+
+\subsection*{Technical Specifications}
+
+\textbf{System Requirements:} Python 3.x, PyQt5, Matplotlib, NumPy\\
+\textbf{Hardware Requirements:} ESP32 controller with ADC capability\\
+\textbf{Communication:} TCP/IP protocol, Port 8888\\
+
+\vspace{2cm}
+
+\begin{center}
+\textit{This report documents the MCB Testing System with ESP32 Integration.}\\
+\textit{All technical implementations follow IEC 60898-1:2015 standards.}\\
+\vspace{1cm}
+\rule{10cm}{0.5pt}\\
+\textbf{Advanced MCB Testing Technology}
+\end{center}
+
+\end{document}

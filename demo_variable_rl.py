@@ -16,8 +16,8 @@ def demo_variable_rl():
     print("🔧 Variable R-L Configuration Demo")
     print("=" * 50)
     
-    # Create backend instance
-    backend = ESP32Backend(esp_ip="192.168.137.187", port=5000)
+    # Create backend instance (updated for your controller)
+    backend = ESP32Backend(esp_ip="10.91.136.24", port=8888)
     
     # Connect signals to see what happens
     backend.connection_status_changed.connect(

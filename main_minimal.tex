@@ -1,0 +1,80 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx} 
+\usepackage{amsmath}
+\usepackage{float}
+\usepackage{booktabs}
+
+\setlength{\headheight}{15pt}
+
+\begin{document}
+
+% Title Page
+\begin{titlepage}
+    \centering
+    \vspace*{2cm}
+    
+    {\Huge\bfseries MCB Testing System\\[0.5cm]}
+    {\LARGE Technical Documentation\\[1.5cm]}
+    
+    {\Large\bfseries Real-Time Waveform Analysis\\and ESP32 Integration\\[0.3cm]}
+    {\large Compliant with IEC 60898-1:2015 Standards\\[2cm]}
+    
+    {\Large\textbf{Advanced Testing Technology}\\[1cm]}
+    
+    \vfill
+    
+    {\large \today}
+\end{titlepage}
+
+\newpage
+\tableofcontents
+\newpage
+
+% Executive Summary
+\section{Executive Summary}
+
+This report documents the development of an advanced MCB (Miniature Circuit Breaker) testing system that integrates real-time waveform analysis with ESP32-based wireless control.
+
+The system provides comprehensive testing capabilities including:
+\begin{itemize}
+    \item Nine different test types including short-circuit, trip characteristics, and temperature rise
+    \item Real-time voltage and current waveform visualization with phase analysis
+    \item Variable resistance and inductance configuration (12-50 Ohm, 0.0000-0.0214H)
+    \item ESP32-based wireless communication with TCP protocol
+    \item Automated DC offset removal and cycle looping for continuous waveforms
+\end{itemize}
+
+\section{System Architecture}
+
+The MCB Testing System follows a three-tier architecture:
+\begin{itemize}
+    \item Frontend Layer: PyQt5-based desktop application with modern UI
+    \item Backend Layer: Python communication module with TCP/UDP protocols
+    \item Hardware Layer: ESP32 microcontroller with sensor integration
+\end{itemize}
+
+\section{Technical Specifications}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Parameter} & \textbf{Value} \\ \midrule
+Test Types & 9 comprehensive tests \\
+Resistance Range & 12-50 Ohm (integer) \\
+Inductance Range & 0.0000-0.0214H (4 decimal) \\
+Power Factor Range & 0.5 - 0.9 \\
+Communication Protocol & TCP with auto-reconnect \\
+Response Time & Less than 200ms \\
+ESP32 IP & 10.91.136.24:8888 \\ \bottomrule
+\end{tabular}
+\caption{System performance specifications}
+\end{table}
+
+\section{Conclusion}
+
+The MCB Testing System represents a comprehensive solution for modern electrical safety testing. The system successfully integrates hardware precision with software sophistication.
+
+\end{document}

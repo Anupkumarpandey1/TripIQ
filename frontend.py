@@ -547,7 +547,6 @@ def set_global_style(app):
 
 
 
-from tcp_client import TCPClient
 import numpy as np
 from collections import deque
 
@@ -559,15 +558,17 @@ class PowerFactorWindow(QMainWindow):
         self.power_factor = power_factor
         self.backend = backend
         
-        # Data storage
-        self.voltage_data = deque(maxlen=500) # Store last 500 voltage points
-        self.time_data = deque(maxlen=500) # Corresponding time points
+        # Data storage for real-time plotting
+        from collections import deque
+        self.voltage_data = deque(maxlen=500)  # Store last 500 voltage points
+        self.current_data = deque(maxlen=500)  # Store calculated current points
+        self.time_data = deque(maxlen=500)     # Corresponding time points
         self.start_time = None
-
-        # TCP Client
-        self.tcp_client = TCPClient(host="10.91.136.24", port=8888)
-        self.tcp_client.new_voltage_data.connect(self.handle_new_data)
-        self.tcp_client.connection_status_changed.connect(self.update_connection_status)
+        
+        # Connect to backend signals for real-time data
+        if self.backend:
+            self.backend.real_time_waveform.connect(self.handle_real_time_data)
+            self.backend.connection_status_changed.connect(self.update_connection_status)
         
         self.setWindowTitle("⚡ ESP32 Power Factor Monitor")
         self.resize(1200, 850)
@@ -695,9 +696,29 @@ class PowerFactorWindow(QMainWindow):
         self.connect_button = QPushButton("Connect to ESP32")
         self.connect_button.clicked.connect(self.toggle_connection)
         
+        # DC Offset Display
+        self.dc_offset_label = QLabel("DC Offset: Calculating...")
+        self.dc_offset_label.setStyleSheet("""
+            font-size: 12px;
+            color: #fab387;
+            padding: 2px;
+        """)
+        self.dc_offset_label.setAlignment(Qt.AlignCenter)
+        
+        # Cycle Status Display
+        self.cycle_status_label = QLabel("Cycle: Capturing...")
+        self.cycle_status_label.setStyleSheet("""
+            font-size: 12px;
+            color: #a6e3a1;
+            padding: 2px;
+        """)
+        self.cycle_status_label.setAlignment(Qt.AlignCenter)
+        
         pf_display_layout.addWidget(self.pf_value_label)
         pf_display_layout.addWidget(self.phase_diff_label)
         pf_display_layout.addLayout(current_layout)
+        pf_display_layout.addWidget(self.dc_offset_label)
+        pf_display_layout.addWidget(self.cycle_status_label)
         pf_display_layout.addSpacing(10)
         pf_display_layout.addWidget(self.connection_status_label)
         pf_display_layout.addWidget(self.connect_button)
@@ -791,82 +812,181 @@ class PowerFactorWindow(QMainWindow):
         return phase_deg
 
     def toggle_connection(self):
-        if self.tcp_client.is_connected():
-            self.tcp_client.disconnect()
+        """Toggle connection through the main backend"""
+        if self.backend and self.backend.connected:
+            self.backend.disconnect()
         else:
-            self.tcp_client.connect()
+            if self.backend:
+                self.backend.connect()
 
-    def update_connection_status(self, connected):
+    def update_connection_status(self, connected, message):
+        """Update connection status display"""
         if connected:
             self.connection_status_label.setText("Status: Connected")
             self.connection_status_label.setStyleSheet("color: #a6e3a1; font-weight: bold;")
             self.connect_button.setText("Disconnect")
-            self.start_time = time.time()
+            self.start_time = None  # Will be set when first data arrives
             self.voltage_data.clear()
+            self.current_data.clear()
             self.time_data.clear()
         else:
             self.connection_status_label.setText("Status: Disconnected")
             self.connection_status_label.setStyleSheet("color: #f38ba8; font-weight: bold;")
             self.connect_button.setText("Connect to ESP32")
 
-    def handle_new_data(self, voltage):
-        if self.start_time is None: # Should be set on connection, but as a fallback
-            self.start_time = time.time()
-        
-        current_time = time.time() - self.start_time
-        self.voltage_data.append(voltage)
-        self.time_data.append(current_time)
+    def handle_real_time_data(self, waveform_data):
+        """Handle real-time waveform data from backend"""
+        try:
+            voltage = waveform_data.get('voltage', 0)
+            current = waveform_data.get('current', 0)
+            timestamp = waveform_data.get('timestamp', 0)
+            raw_voltage = waveform_data.get('raw_voltage', 0)
+            dc_offset = waveform_data.get('dc_offset', None)
+            
+            if self.start_time is None:
+                self.start_time = timestamp / 1000000.0  # Convert microseconds to seconds
+            
+            # Convert timestamp to relative time in seconds
+            current_time = timestamp / 1000000.0 - self.start_time
+            
+            # Store data for plotting
+            self.voltage_data.append(voltage)
+            self.current_data.append(current)
+            self.time_data.append(current_time)
+            
+            # Update DC offset display
+            if dc_offset is not None:
+                self.dc_offset_label.setText(f"DC Offset: {dc_offset:.1f}V (Raw: {raw_voltage:.1f}V)")
+            else:
+                self.dc_offset_label.setText("DC Offset: Calculating...")
+            
+            # Update cycle status display
+            cycle_captured = waveform_data.get('cycle_captured', False)
+            cycle_samples = waveform_data.get('cycle_samples', 0)
+            
+            if cycle_captured:
+                self.cycle_status_label.setText(f"Cycle: Looping ({cycle_samples} samples)")
+                self.cycle_status_label.setStyleSheet("""
+                    font-size: 12px;
+                    color: #a6e3a1;
+                    padding: 2px;
+                """)
+            else:
+                self.cycle_status_label.setText("Cycle: Capturing first cycle...")
+                self.cycle_status_label.setStyleSheet("""
+                    font-size: 12px;
+                    color: #f9e2af;
+                    padding: 2px;
+                """)
+            
+        except Exception as e:
+            print(f"Error handling real-time data: {e}")
 
     def closeEvent(self, event):
-        """Ensure TCP client is disconnected when window is closed."""
-        self.tcp_client.disconnect()
+        """Clean up when window is closed."""
+        # Disconnect from backend signals
+        if self.backend:
+            try:
+                self.backend.real_time_waveform.disconnect(self.handle_real_time_data)
+                self.backend.connection_status_changed.disconnect(self.update_connection_status)
+            except:
+                pass  # Signals might already be disconnected
         super().closeEvent(event)
 
     def draw_waveform(self):
-        """Draw waveform from live data"""
+        """Draw waveform from real-time data"""
         self.ax_waveform.clear()
 
-        if not self.voltage_data:
+        if not self.voltage_data or len(self.voltage_data) < 2:
             # Show a placeholder message if no data is available
-            self.ax_waveform.text(0.5, 0.5, 'Not Connected or No Data Received...',
-                                  ha='center', va='center', color='#cdd6f4', fontsize=14)
+            self.ax_waveform.text(0.5, 0.5, 'Waiting for Real-Time Data from ESP32...',
+                                  ha='center', va='center', color='#cdd6f4', fontsize=14,
+                                  transform=self.ax_waveform.transAxes)
+            self.ax_waveform.set_xlim(0, 1)
+            self.ax_waveform.set_ylim(0, 1)
         else:
-            # Plot Voltage (Real Data)
-            self.ax_waveform.plot(self.time_data, self.voltage_data, color='#f38ba8', linewidth=2, label='Voltage (Live)')
-
-            # Calculate and Plot Current (Calculated)
-            phase_rad = np.arccos(np.clip(self.power_factor, 0, 1))
+            # Convert deques to numpy arrays for plotting
+            time_array = np.array(self.time_data)
+            voltage_array = np.array(self.voltage_data)
+            current_array = np.array(self.current_data)
             
-            if len(self.voltage_data) > 2:
-                v_peak_real = np.max(self.voltage_data)
-                current_peak_calc = self.current_input.value() * np.sqrt(2) # I = I_rms * sqrt(2)
+            # Plot Real Voltage Data
+            self.ax_waveform.plot(time_array, voltage_array, 
+                                 color='#f38ba8', linewidth=2.5, 
+                                 label='Voltage (Real)', alpha=0.9)
+            
+            # Plot Calculated Current Data
+            self.ax_waveform.plot(time_array, current_array, 
+                                 color='#a6e3a1', linewidth=2.5, 
+                                 label='Current (Calculated)', alpha=0.9)
+            
+            # Find peaks for phase difference annotation
+            if len(voltage_array) > 10:
+                # Find voltage peaks
+                v_peaks = []
+                c_peaks = []
                 
-                time_for_calc = np.linspace(self.time_data[0], self.time_data[-1], len(self.time_data))
+                for i in range(1, len(voltage_array) - 1):
+                    if voltage_array[i] > voltage_array[i-1] and voltage_array[i] > voltage_array[i+1]:
+                        if voltage_array[i] > np.max(voltage_array) * 0.8:  # Only significant peaks
+                            v_peaks.append(i)
+                    
+                    if current_array[i] > current_array[i-1] and current_array[i] > current_array[i+1]:
+                        if current_array[i] > np.max(current_array) * 0.8:  # Only significant peaks
+                            c_peaks.append(i)
                 
-                v_np = np.array(self.voltage_data)
-                zero_crossings = np.where(np.diff(np.sign(v_np)))[0]
-                if len(zero_crossings) > 1:
-                    time_diffs = np.diff(np.array(self.time_data)[zero_crossings])
-                    avg_period = np.mean(time_diffs) * 2
-                    frequency = 1 / avg_period if avg_period > 0 else 50
-                else:
-                    frequency = 50 # Default if no crossings found
+                # Draw phase difference if we have peaks
+                if len(v_peaks) > 0 and len(c_peaks) > 0:
+                    v_peak_time = time_array[v_peaks[0]]
+                    c_peak_time = time_array[c_peaks[0]]
+                    
+                    # Draw vertical lines at peaks
+                    self.ax_waveform.axvline(x=v_peak_time, color='#f38ba8', 
+                                           linestyle='--', alpha=0.6, linewidth=1.5)
+                    self.ax_waveform.axvline(x=c_peak_time, color='#a6e3a1', 
+                                           linestyle='--', alpha=0.6, linewidth=1.5)
+                    
+                    # Phase difference arrow
+                    if abs(c_peak_time - v_peak_time) > 0.001:  # Avoid tiny differences
+                        arrow_y = np.min(voltage_array) * 0.8
+                        phase_diff_deg = self.calculate_phase_diff(self.power_factor)
+                        
+                        self.ax_waveform.annotate('', 
+                                                xy=(c_peak_time, arrow_y), 
+                                                xytext=(v_peak_time, arrow_y),
+                                                arrowprops=dict(arrowstyle='<->', 
+                                                              color='#fab387', lw=2.5))
+                        
+                        mid_point = (v_peak_time + c_peak_time) / 2
+                        self.ax_waveform.text(mid_point, arrow_y - abs(arrow_y) * 0.3, 
+                                            f'φ = {phase_diff_deg:.1f}°', 
+                                            color='#fab387', fontsize=12, ha='center', 
+                                            fontweight='bold',
+                                            bbox=dict(boxstyle='round,pad=0.5', 
+                                                    facecolor='#1e1e2e', 
+                                                    edgecolor='#fab387', linewidth=2))
 
-                omega = 2 * np.pi * frequency
-                current_calculated = current_peak_calc * np.sin(omega * time_for_calc - phase_rad)
-
-                self.ax_waveform.plot(time_for_calc, current_calculated, color='#a6e3a1', linewidth=2, label=f'Current (Calculated)', linestyle='--')
-
+        # Set labels and title
         self.ax_waveform.set_xlabel("Time (s)", fontsize=12, color='#cdd6f4', fontweight='bold')
-        self.ax_waveform.set_ylabel("Amplitude", fontsize=12, color='#cdd6f4', fontweight='bold')
-        self.ax_waveform.set_title(f"⚡ Live Voltage & Current Waveforms (PF = {self.power_factor:.2f})", 
+        self.ax_waveform.set_ylabel("Amplitude (V/A)", fontsize=12, color='#cdd6f4', fontweight='bold')
+        self.ax_waveform.set_title(f"⚡ Real-Time Voltage & Current Waveforms (PF = {self.power_factor:.2f})", 
                                    fontsize=14, color='#89b4fa', pad=15, fontweight='bold')
+        
+        # Grid and legend
         self.ax_waveform.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
         self.ax_waveform.legend(loc='upper right', framealpha=0.9, facecolor='#313244', 
                                edgecolor='#89b4fa', fontsize=11, frameon=True)
         
-        if self.voltage_data:
-            self.ax_waveform.set_xlim(self.time_data[0], self.time_data[-1])
+        # Set axis limits based on data
+        if self.voltage_data and len(self.time_data) > 1:
+            self.ax_waveform.set_xlim(min(self.time_data), max(self.time_data))
+            
+            # Set y-limits to show both voltage and current nicely
+            all_values = list(self.voltage_data) + list(self.current_data)
+            if all_values:
+                y_min, y_max = min(all_values), max(all_values)
+                y_range = y_max - y_min
+                self.ax_waveform.set_ylim(y_min - y_range * 0.1, y_max + y_range * 0.1)
 
         self.ax_waveform.tick_params(colors='#cdd6f4', labelsize=10)
         
@@ -912,6 +1032,7 @@ class MCBTestingSoftware(QMainWindow):
         self.backend.command_sent.connect(self.on_command_sent)
         self.backend.error_occurred.connect(self.on_error_occurred)
         self.backend.rl_config_confirmed.connect(self.on_rl_config_confirmed)
+        self.backend.real_time_waveform.connect(self.on_real_time_waveform)
     
     def create_connection_screen(self):
         screen = QWidget()
@@ -1434,6 +1555,12 @@ class MCBTestingSoftware(QMainWindow):
         QMessageBox.information(self, "Configuration Confirmed", 
                                f"ESP32 Confirmation:\n{message}")
         print(f"R-L Config Confirmed: {message}")
+    
+    def on_real_time_waveform(self, waveform_data):
+        """Handle real-time waveform data"""
+        # This data is automatically handled by PowerFactorWindow if it's open
+        # We can add additional processing here if needed
+        pass
     
     # ===== Connection Management =====
     
